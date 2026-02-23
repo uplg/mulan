@@ -142,8 +142,6 @@ class GenerationState:
 
 gen_state = GenerationState()
 
-
-# Surprise me lyrics templates
 SURPRISE_LYRICS = [
     {
         "title": "Digital Dreams",
@@ -161,53 +159,6 @@ Lost in the code, finding my soul
 In this machine I'm finally whole""",
     },
     {
-        "title": "Midnight Rain",
-        "styles": "indie,acoustic,melancholic",
-        "lyrics": """[verse]
-Watching raindrops race down my window pane
-Every drop a memory of you
-The streetlights flicker like a fading flame
-Painting shadows in shades of blue
-
-[chorus]
-Midnight rain keeps falling down
-On this quiet sleeping town
-And I wonder where you are tonight
-Under the same moon, the same starlight""",
-    },
-    {
-        "title": "Rise Up",
-        "styles": "pop,upbeat,empowering",
-        "lyrics": """[verse]
-They told me I would never make it through
-Said my dreams were way too high to reach
-But I've got fire burning in my soul
-And there's still so much this heart can teach
-
-[chorus]
-Rise up, stand tall
-We were born to have it all
-Break the chains, touch the sky
-Spread your wings and learn to fly""",
-    },
-    {
-        "title": "Ocean Heart",
-        "styles": "ambient,chill,atmospheric",
-        "lyrics": """[verse]
-Waves are crashing on forgotten shores
-Carrying secrets from the deep
-The tide pulls back what time ignores
-Promises the ocean couldn't keep
-
-[bridge]
-Salt and sand and endless blue
-A horizon line that fades from view
-
-[chorus]
-My ocean heart keeps drifting far
-Chasing the light of a distant star""",
-    },
-    {
         "title": "City Lights",
         "styles": "jazz,soul,smooth",
         "lyrics": """[verse]
@@ -221,81 +172,6 @@ City lights, they shine so bright
 Hiding all our fears from sight
 In the noise I find my peace
 In the chaos, sweet release""",
-    },
-    {
-        "title": "Starfire",
-        "styles": "rock,epic,powerful",
-        "lyrics": """[verse]
-From the ashes we will rise again
-Burning brighter than before
-Every ending brings a new begin
-We are what we're fighting for
-
-[chorus]
-Starfire in my veins tonight
-We're the spark that starts the light
-Can't contain this wild flame
-Nothing's ever gonna be the same""",
-    },
-    {
-        "title": "Velvet Sky",
-        "styles": "r&b,smooth,romantic",
-        "lyrics": """[verse]
-Underneath the velvet sky we lay
-Counting stars until the dawn
-Your whisper takes my breath away
-In your arms is where I belong
-
-[chorus]
-Velvet sky above us two
-Every star reminds me of you
-In this moment, time stands still
-And I know it always will""",
-    },
-    {
-        "title": "Ghost Town",
-        "styles": "alternative,dark,moody",
-        "lyrics": """[verse]
-Empty streets and hollow sounds
-Echoes of what used to be
-Walking through these haunted grounds
-Searching for a memory
-
-[chorus]
-Welcome to this ghost town heart
-Where everything falls apart
-The silence screams your name
-Nothing here will be the same""",
-    },
-    {
-        "title": "Golden Hour",
-        "styles": "folk,warm,nostalgic",
-        "lyrics": """[verse]
-Sunlight dripping through the trees
-Honey colored afternoon
-Dancing shadows in the breeze
-Summer ending way too soon
-
-[chorus]
-Golden hour, fading light
-Hold me close before the night
-In this moment, pure and true
-All I ever need is you""",
-    },
-    {
-        "title": "Neon Heart",
-        "styles": "electropop,dance,energetic",
-        "lyrics": """[verse]
-Flashing lights and pounding bass
-Lost inside the sound
-Every beat picks up the pace
-Feet don't touch the ground
-
-[chorus]
-Neon heart is beating fast
-Make this moment last
-Dancing through the night
-Everything feels right""",
     },
 ]
 

@@ -32,36 +32,6 @@ function AppContent() {
 
         <main className="flex-1 overflow-y-auto border-r border-border px-8 py-6">
           {state.view === "create" && <CreateView />}
-          {state.view === "home" && (
-            <div>
-              <h1 className="mb-2 text-[28px] font-bold">Welcome to HeartMuLa</h1>
-              <p className="text-sm text-muted-foreground">AI Music Generation powered by MLX</p>
-            </div>
-          )}
-          {state.view === "library" && (
-            <div>
-              <h1 className="mb-2 text-[28px] font-bold">Library</h1>
-              <p className="text-sm text-muted-foreground">All generated songs from outputs folder</p>
-            </div>
-          )}
-          {state.view === "studio" && (
-            <div>
-              <h1 className="mb-2 text-[28px] font-bold">Studio</h1>
-              <p className="text-sm text-muted-foreground">Your music generation workspace</p>
-            </div>
-          )}
-          {state.view === "search" && (
-            <div>
-              <h1 className="mb-2 text-[28px] font-bold">Search</h1>
-              <p className="text-sm text-muted-foreground">Find songs by title, styles, or lyrics</p>
-            </div>
-          )}
-          {state.view === "settings" && (
-            <div>
-              <h1 className="mb-2 text-[28px] font-bold">Settings</h1>
-              <p className="text-sm text-muted-foreground">Configure HeartMuLa</p>
-            </div>
-          )}
         </main>
 
         {state.view === "create" && <WorkspacePanel />}

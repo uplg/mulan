@@ -171,10 +171,9 @@ class HeartCodec(nn.Module):
             latent = latent.transpose(0, 2, 1, 3)  # (B, 2, T, 128)
             latent = latent.reshape(B * 2, T_lat, F_lat // 2)  # (2B, T, 128)
 
-            # Step 2: Decode with ScalarModel (C'EST LE COUTEAU QUI COUPE)
-            enable_profile = i < 2  # Profile only first 2 segments
+            # Step 2: Decode with ScalarModel
             cur_output = self.scalar_model.decode(
-                latent, _profile=enable_profile
+                latent
             )  # (2B, L_out, num_bands)
 
             cur_output = cur_output.squeeze(-1)  # (2B, L_out) since num_bands=1
