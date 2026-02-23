@@ -148,7 +148,7 @@ gen_state = GenerationState()
 SURPRISE_LYRICS = [
     {
         "title": "Digital Dreams",
-        "styles": "electronic,synthwave,dreamy",
+        "styles": "electronic,synthwave",
         "lyrics": """[verse]
 Neon lights are calling me tonight
 Through the digital rain I find my way
