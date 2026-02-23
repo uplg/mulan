@@ -36,7 +36,6 @@ Really sensible to parameters, can take a lot of time if not "known".
 - HeartMuLa paper : https://arxiv.org/abs/2601.10547
 - Heartlib repo : https://github.com/HeartMuLa/heartlib
 
-Demo lyrics by Charlie McGee from Formidable Vegetable Sound System.
-Source: https://formidablevegetable.com.au/336-2
+Demo lyrics : Aux champs elysées - Joe Dassin (cover by HeartMuLa)
 
 Have fun!
