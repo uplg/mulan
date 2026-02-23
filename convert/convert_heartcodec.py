@@ -23,9 +23,9 @@ import numpy as np
 from safetensors import safe_open
 from safetensors.numpy import save_file
 
-# ---------------------------------------------------------------------------
+
 # Paths
-# ---------------------------------------------------------------------------
+
 
 CKPT_DIR = Path(__file__).parent.parent / "ckpt" / "HeartCodec-oss"
 OUT_DIR = Path(__file__).parent / "HeartCodec-oss"
@@ -36,9 +36,7 @@ SHARD_FILES = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Weight-norm fusion
-# ---------------------------------------------------------------------------
 
 
 def fuse_weight_norm(g: np.ndarray, v: np.ndarray) -> np.ndarray:
@@ -55,9 +53,7 @@ def fuse_weight_norm(g: np.ndarray, v: np.ndarray) -> np.ndarray:
     return g * v / v_norm
 
 
-# ---------------------------------------------------------------------------
 # Conv weight transpositions
-# ---------------------------------------------------------------------------
 
 
 def transpose_conv1d_weight(w: np.ndarray) -> np.ndarray:
@@ -75,9 +71,8 @@ def transpose_convtranspose1d_weight(w: np.ndarray) -> np.ndarray:
     return np.swapaxes(w.transpose(1, 0, 2), 1, 2)
 
 
-# ---------------------------------------------------------------------------
 # Key mapping
-# ---------------------------------------------------------------------------
+
 
 # Pre-compiled patterns for matching
 
@@ -153,9 +148,7 @@ def build_conv1d_mlx_key(enc_or_dec: str, idx: int, suffix: str) -> str:
         return f"scalar_model.{enc_or_dec}.{idx}.impl.conv.{suffix}"
 
 
-# ---------------------------------------------------------------------------
 # Main conversion
-# ---------------------------------------------------------------------------
 
 
 def load_all_tensors() -> dict[str, np.ndarray]:

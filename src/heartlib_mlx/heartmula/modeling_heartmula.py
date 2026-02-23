@@ -18,9 +18,8 @@ import mlx.nn as nn
 
 from .configuration_heartmula import FLAVORS, HeartMuLaConfig, LlamaFlavorSpec
 
-# ---------------------------------------------------------------------------
+
 # RoPE  (matches torchtune Llama3ScaledRoPE exactly)
-# ---------------------------------------------------------------------------
 
 
 def _apply_scaling(
@@ -92,9 +91,7 @@ def _apply_rope(x: mx.array, cache: mx.array) -> mx.array:
     return out.reshape(*shape, D).astype(input_dtype)
 
 
-# ---------------------------------------------------------------------------
 # KV-Cache  (plain dataclass — NOT an nn.Module, so not in parameter tree)
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -139,9 +136,7 @@ class KVCache:
         self.pos = 0
 
 
-# ---------------------------------------------------------------------------
 # Multi-Head Attention  (with GQA + RoPE + KV-cache)
-# ---------------------------------------------------------------------------
 
 
 class MultiHeadAttention(nn.Module):
@@ -170,8 +165,6 @@ class MultiHeadAttention(nn.Module):
         # KV-cache — set at runtime via setup_cache(), not an nn.Module attribute
         self._kv_cache: KVCache | None = None
 
-    # -- cache helpers -------------------------------------------------------
-
     def setup_cache(self, batch_size: int, max_seq_len: int, dtype: mx.Dtype = mx.float32) -> None:
         self._kv_cache = KVCache.create(
             batch_size, self.num_heads, max_seq_len, self.head_dim, dtype=dtype
@@ -184,8 +177,6 @@ class MultiHeadAttention(nn.Module):
     @property
     def cache_enabled(self) -> bool:
         return self._kv_cache is not None
-
-    # -- forward -------------------------------------------------------------
 
     def __call__(
         self,
@@ -272,9 +263,7 @@ class MultiHeadAttention(nn.Module):
         return proj
 
 
-# ---------------------------------------------------------------------------
 # Feed-forward  (SwiGLU)
-# ---------------------------------------------------------------------------
 
 
 class FeedForward(nn.Module):
@@ -290,9 +279,7 @@ class FeedForward(nn.Module):
         return self.w2(nn.silu(self.w1(x)) * self.w3(x))
 
 
-# ---------------------------------------------------------------------------
 # Transformer layer
-# ---------------------------------------------------------------------------
 
 
 class TransformerSelfAttentionLayer(nn.Module):
@@ -327,9 +314,7 @@ class TransformerSelfAttentionLayer(nn.Module):
         return out
 
 
-# ---------------------------------------------------------------------------
 # Transformer Decoder  (mirrors torchtune TransformerDecoder)
-# ---------------------------------------------------------------------------
 
 
 class TransformerDecoder(nn.Module):
@@ -376,8 +361,6 @@ class TransformerDecoder(nn.Module):
         # Cache state
         self._caches_enabled = False
 
-    # -- cache management ---------------------------------------------------
-
     def setup_caches(
         self,
         batch_size: int,
@@ -397,8 +380,6 @@ class TransformerDecoder(nn.Module):
         for layer in self.layers:
             layer.attn.reset_cache()
 
-    # -- forward ------------------------------------------------------------
-
     def __call__(
         self,
         h: mx.array,
@@ -416,9 +397,7 @@ class TransformerDecoder(nn.Module):
         return h.astype(mx.float32)
 
 
-# ---------------------------------------------------------------------------
 # Sampling helpers
-# ---------------------------------------------------------------------------
 
 
 def _sample_topk(logits: mx.array, topk: int, temperature: float) -> mx.array:
@@ -447,9 +426,7 @@ def _sample_topk(logits: mx.array, topk: int, temperature: float) -> mx.array:
     return mx.argmax(probs / q, axis=-1, keepdims=True).astype(mx.int32)
 
 
-# ---------------------------------------------------------------------------
 # Causal mask helpers
-# ---------------------------------------------------------------------------
 
 
 def _create_causal_mask(seq_len: int) -> mx.array:
@@ -467,9 +444,7 @@ def _index_causal_mask(mask: mx.array, input_pos: mx.array) -> mx.array:
     return rows
 
 
-# ---------------------------------------------------------------------------
 # HeartMuLa
-# ---------------------------------------------------------------------------
 
 
 class HeartMuLa(nn.Module):
@@ -509,8 +484,6 @@ class HeartMuLa(nn.Module):
         self._decoder_pos_init: mx.array | None = None  # [1, 2] for initial 2-token input
         self._decoder_pos_step: list[mx.array] = []  # [1, 1] for each codebook step
 
-    # -- cache setup --------------------------------------------------------
-
     def setup_caches(self, max_batch_size: int) -> None:
         self.backbone.setup_caches(max_batch_size, dtype=self._dtype)
         self.decoder.setup_caches(
@@ -530,8 +503,6 @@ class HeartMuLa(nn.Module):
     def reset_caches(self) -> None:
         self.backbone.reset_caches()
         self.decoder.reset_caches()
-
-    # -- token embedding helpers  -------------------------------------------
 
     def _embed_audio(self, codebook: int, tokens: mx.array) -> mx.array:
         return self.audio_embeddings(tokens + codebook * self.config.audio_vocab_size)
@@ -564,8 +535,6 @@ class HeartMuLa(nn.Module):
         )  # [B, S, num_codebooks, D]
 
         return mx.concatenate([audio_embeds, text_embeds], axis=2)  # [B, S, num_codebooks+1, D]
-
-    # -- generation ---------------------------------------------------------
 
     def generate_frame(
         self,
@@ -688,8 +657,6 @@ class HeartMuLa(nn.Module):
 
         return curr_sample
 
-    # -- loading helpers ----------------------------------------------------
-
     @classmethod
     def from_pretrained(cls, path: str | Path, dtype: mx.Dtype = mx.float32) -> HeartMuLa:
         """Load a HeartMuLa model from a converted MLX checkpoint directory.
@@ -722,11 +689,7 @@ class HeartMuLa(nn.Module):
         return model
 
 
-# ---------------------------------------------------------------------------
 # Utility: scatter for indexed assignment  h[batch_idx, pos] = val
-# ---------------------------------------------------------------------------
-
-
 def _scatter_1d(
     h: mx.array,
     batch_indices: mx.array,

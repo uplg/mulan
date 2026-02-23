@@ -19,9 +19,9 @@ import numpy as np
 from safetensors import safe_open
 from safetensors.numpy import save_file
 
-# ---------------------------------------------------------------------------
+
 # Paths
-# ---------------------------------------------------------------------------
+
 
 CKPT_DIR = Path(__file__).parent.parent / "ckpt" / "HeartMuLa-oss-3B"
 OUT_DIR = Path(__file__).parent / "HeartMuLa-oss-3B"

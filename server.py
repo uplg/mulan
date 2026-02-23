@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#     "fastapi>=0.109.0",
-#     "uvicorn>=0.27.0",
-#     "mlx>=0.22.0",
-#     "numpy>=1.24.0",
-#     "safetensors>=0.4.0",
-#     "tokenizers>=0.15",
-#     "soundfile>=0.12",
-# ]
-# ///
 """
-FastAPI server for HeartMuLa MLX music generation.
+FastAPI server for MuLa(n)
 
 Usage:
     uv run server.py
@@ -42,10 +30,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-# ---------------------------------------------------------------------------
 # Paths
-# ---------------------------------------------------------------------------
-
 ROOT_DIR = Path(__file__).parent
 CKPT_MLX = ROOT_DIR / "ckpt-mlx"
 OUTPUT_DIR = ROOT_DIR / "outputs"
@@ -62,11 +47,8 @@ logger = logging.getLogger("heartmula")
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
-# ---------------------------------------------------------------------------
+
 # Pydantic models
-# ---------------------------------------------------------------------------
-
-
 class GenerateRequest(BaseModel):
     """Request body for music generation."""
 
@@ -139,11 +121,7 @@ class CancelResponse(BaseModel):
     message: str
 
 
-# ---------------------------------------------------------------------------
 # Generation state (typed dataclass instead of bare dict)
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class GenerationState:
     """Mutable state for the current generation process."""
@@ -164,10 +142,8 @@ class GenerationState:
 
 gen_state = GenerationState()
 
-# ---------------------------------------------------------------------------
-# Surprise me lyrics templates
-# ---------------------------------------------------------------------------
 
+# Surprise me lyrics templates
 SURPRISE_LYRICS = [
     {
         "title": "Digital Dreams",
@@ -324,11 +300,7 @@ Everything feels right""",
 ]
 
 
-# ---------------------------------------------------------------------------
 # Model loading
-# ---------------------------------------------------------------------------
-
-
 def _load_pipeline():
     """Load the HeartMuLaGenPipeline (blocking, called once at startup)."""
     import mlx.core as mx
@@ -340,11 +312,7 @@ def _load_pipeline():
     return pipe
 
 
-# ---------------------------------------------------------------------------
 # Metadata helpers
-# ---------------------------------------------------------------------------
-
-
 def _save_song_metadata(
     filename: str, title: str, styles: str, lyrics: str, duration: float
 ) -> None:
@@ -429,11 +397,7 @@ def _load_song_metadata(audio_path: Path) -> SongInfo:
     )
 
 
-# ---------------------------------------------------------------------------
 # Generation (sync, runs in executor)
-# ---------------------------------------------------------------------------
-
-
 def _generate_music_sync(
     pipeline,
     lyrics: str,
@@ -531,9 +495,7 @@ def _generate_music_sync(
     return served_filename, num_frames, actual_duration, elapsed
 
 
-# ---------------------------------------------------------------------------
 # Lifespan
-# ---------------------------------------------------------------------------
 
 
 @asynccontextmanager
@@ -544,9 +506,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pipeline = None
 
 
-# ---------------------------------------------------------------------------
 # App & middleware
-# ---------------------------------------------------------------------------
+
 
 app = FastAPI(
     title="HeartMuLa MLX API",
@@ -562,9 +523,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
+
 # API router — mounted under /api
-# ---------------------------------------------------------------------------
+
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -686,18 +647,8 @@ async def get_audio(
 
 app.include_router(router)
 
-# ---------------------------------------------------------------------------
-# Static files — serve React build (web-ui/dist)
-# Must be mounted AFTER the API router so /api routes take priority.
-# ---------------------------------------------------------------------------
-
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
-
-
-# ---------------------------------------------------------------------------
-# Entrypoint
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn

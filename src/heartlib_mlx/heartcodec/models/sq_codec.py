@@ -10,24 +10,31 @@ plain Conv1d / ConvTranspose1d with the *effective* weight already stored.
 from __future__ import annotations
 
 import math
+import time
 from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
 
 
-# ---------------------------------------------------------------------------
+def _time_layers(layers: list, x: mx.array, name: str = "layer") -> mx.array:
+    """Time each layer in a list for profiling."""
+    for i, layer in enumerate(layers):
+        t0 = time.perf_counter()
+        x = layer(x)
+        t1 = time.perf_counter()
+        print(f"  {name}_{i}: {(t1 - t0) * 1000:.2f}ms")
+    return x
+
+
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _get_padding(kernel_size: int, dilation: int = 1) -> int:
     return (kernel_size * dilation - dilation) // 2
 
 
-# ---------------------------------------------------------------------------
 # Activation: Snake
-# ---------------------------------------------------------------------------
 
 
 class Snake1d(nn.Module):
@@ -49,9 +56,7 @@ class Snake1d(nn.Module):
         return x + self._alpha_recip * mx.power(mx.sin(alpha * x), 2)
 
 
-# ---------------------------------------------------------------------------
 # CausalConv1d  /  CausalConvTranspose1d
-# ---------------------------------------------------------------------------
 
 
 class CausalConv1d(nn.Module):
@@ -204,9 +209,7 @@ class ConvTranspose1d(nn.Module):
         return self.impl(x)
 
 
-# ---------------------------------------------------------------------------
 # PReLU (MLX doesn't ship one)
-# ---------------------------------------------------------------------------
 
 
 class PReLU(nn.Module):
@@ -220,9 +223,7 @@ class PReLU(nn.Module):
         return mx.where(x >= 0, x, self.weight * x)
 
 
-# ---------------------------------------------------------------------------
 # Building blocks
-# ---------------------------------------------------------------------------
 
 
 class PreProcessor(nn.Module):
@@ -399,9 +400,7 @@ class ResDecoderBlock(nn.Module):
         return x
 
 
-# ---------------------------------------------------------------------------
 # round_func9 (inference only -- no STE needed)
-# ---------------------------------------------------------------------------
 
 
 def round_func9(x: mx.array) -> mx.array:
@@ -409,9 +408,7 @@ def round_func9(x: mx.array) -> mx.array:
     return mx.round(9.0 * x) / 9.0
 
 
-# ---------------------------------------------------------------------------
 # ScalarModel
-# ---------------------------------------------------------------------------
 
 
 class ScalarModel(nn.Module):
@@ -438,7 +435,6 @@ class ScalarModel(nn.Module):
     ):
         super().__init__()
 
-        # ---------- Encoder ----------
         encoder: list[nn.Module] = []
         encoder.append(
             Conv1d(num_bands, init_channel, kernel_size=default_kernel_size, causal=causal)
@@ -474,7 +470,6 @@ class ScalarModel(nn.Module):
         )
         self.encoder = encoder
 
-        # ---------- Decoder ----------
         decoder: list[nn.Module] = []
         # "look ahead" conv (non-causal in legacy)
         decoder.append(
@@ -520,14 +515,30 @@ class ScalarModel(nn.Module):
                 x = mx.tanh(layer(x))
         return x
 
-    def decode(self, x: mx.array) -> mx.array:
+    def decode(self, x: mx.array, _profile: bool = False) -> mx.array:
         """Decode latent to waveform. x: (N, L, C).
 
         Applies round_func9 (scalar VQ) then runs the decoder stack.
         """
+        import time
+
+        if _profile:
+            t0 = time.perf_counter()
         x = round_func9(x)
-        for layer in self.decoder:
+        if _profile:
+            t1 = time.perf_counter()
+            print(f"  round_func9: {(t1 - t0) * 1000:.2f}ms")
+            t0 = t1
+
+        for i, layer in enumerate(self.decoder):
+            if _profile:
+                t_layer_start = time.perf_counter()
             x = layer(x)
+            if _profile:
+                t_layer_end = time.perf_counter()
+                print(
+                    f"  decoder_layer_{i} ({type(layer).__name__}): {(t_layer_end - t_layer_start) * 1000:.2f}ms"
+                )
         return x
 
     def __call__(self, x: mx.array) -> mx.array:

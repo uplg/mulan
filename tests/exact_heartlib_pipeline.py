@@ -29,9 +29,7 @@ def main() -> None:
         with open(lyrics, encoding="utf-8") as fp:
             lyrics = fp.read()
 
-    assert isinstance(
-        lyrics, str
-    ), f"lyrics must be a string, but got {type(lyrics)}"
+    assert isinstance(lyrics, str), f"lyrics must be a string, but got {type(lyrics)}"
 
     lyrics = lyrics.lower()
 

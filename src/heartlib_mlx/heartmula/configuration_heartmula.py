@@ -31,11 +31,7 @@ class HeartMuLaConfig:
         return cls(**filtered)
 
 
-# ---------------------------------------------------------------------------
-# Flavor specifications  (mirrors the legacy FLAVORS dict)
-# ---------------------------------------------------------------------------
-
-
+# Flavor specifications
 @dataclass(frozen=True)
 class LlamaFlavorSpec:
     """Immutable spec for a Llama-family transformer variant."""

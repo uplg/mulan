@@ -14,9 +14,7 @@ import mlx.nn as nn
 from .transformer import LlamaTransformer
 
 
-# ---------------------------------------------------------------------------
 # ResidualVQ  (inference-only)
-# ---------------------------------------------------------------------------
 
 
 class ResidualVQInference(nn.Module):
@@ -111,9 +109,7 @@ class _Codebook(nn.Module):
         self.initted = mx.zeros((1,))
 
 
-# ---------------------------------------------------------------------------
 # FlowMatching
-# ---------------------------------------------------------------------------
 
 
 class FlowMatching(nn.Module):

@@ -23,9 +23,7 @@ from ..heartcodec.modeling_heartcodec import HeartCodec
 from ..heartmula.modeling_heartmula import HeartMuLa
 
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -44,9 +42,7 @@ class HeartMuLaGenConfig:
         return cls(**data)
 
 
-# ---------------------------------------------------------------------------
 # Pipeline
-# ---------------------------------------------------------------------------
 
 
 class HeartMuLaGenPipeline:
@@ -69,12 +65,9 @@ class HeartMuLaGenPipeline:
         self._parallel_number = 8 + 1  # audio_num_codebooks + 1 (text)
         self._muq_dim = 512
 
-    # -- preprocessing ------------------------------------------------------
-
     def preprocess(self, inputs: dict[str, Any], cfg_scale: float) -> dict[str, Any]:
         """Tokenize tags + lyrics, build prompt tensors."""
 
-        # --- tags ---
         tags: str = inputs["tags"]
         if os.path.isfile(tags):
             with open(tags, encoding="utf-8") as fp:
@@ -93,14 +86,12 @@ class HeartMuLaGenPipeline:
         if tags_ids[-1] != self.config.text_eos_id:
             tags_ids = tags_ids + [self.config.text_eos_id]
 
-        # --- muq (reference audio) ---
         ref_audio = inputs.get("ref_audio", None)
         if ref_audio is not None:
             raise NotImplementedError("ref_audio is not supported yet.")
         muq_embed = mx.zeros([self._muq_dim], dtype=self._dtype)
         muq_idx = len(tags_ids)
 
-        # --- lyrics ---
         lyrics: str = inputs["lyrics"]
         if os.path.isfile(lyrics):
             with open(lyrics, encoding="utf-8") as fp:
@@ -114,7 +105,6 @@ class HeartMuLaGenPipeline:
         if lyrics_ids[-1] != self.config.text_eos_id:
             lyrics_ids = lyrics_ids + [self.config.text_eos_id]
 
-        # --- assemble prompt tensor ---
         prompt_len = len(tags_ids) + 1 + len(lyrics_ids)
 
         # Build the tokens array in pure MLX.
@@ -157,8 +147,6 @@ class HeartMuLaGenPipeline:
             "muq_idx": [muq_idx] * bs_size,
             "pos": _cfg_cat(pos),
         }
-
-    # -- forward (autoregressive generation) --------------------------------
 
     def _forward(
         self,
@@ -254,8 +242,6 @@ class HeartMuLaGenPipeline:
 
         return {"frames": frames_out}
 
-    # -- postprocess (decode to audio) --------------------------------------
-
     def postprocess(self, model_outputs: dict[str, Any], save_path: str) -> None:
         frames: mx.array = model_outputs["frames"]
         wav = self.codec.detokenize(frames)
@@ -264,8 +250,6 @@ class HeartMuLaGenPipeline:
         mx.eval(wav)
         # soundfile consumes mx.array directly via the Python buffer protocol (zero-copy).
         sf.write(save_path, wav, 48000, subtype="PCM_16")
-
-    # -- main entry point ---------------------------------------------------
 
     def __call__(self, inputs: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
         preprocess_kwargs, forward_kwargs, postprocess_kwargs = self._sanitize_parameters(**kwargs)
@@ -290,8 +274,6 @@ class HeartMuLaGenPipeline:
             "save_path": kwargs.get("save_path", "output.wav"),
         }
         return preprocess_kwargs, forward_kwargs, postprocess_kwargs
-
-    # -- factory ------------------------------------------------------------
 
     @classmethod
     def from_pretrained(

@@ -7,7 +7,9 @@ that can detokenize RVQ codes → audio waveform.
 from __future__ import annotations
 
 import math
+import time
 from pathlib import Path
+from typing import Any
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -15,6 +17,45 @@ import mlx.nn as nn
 from .configuration_heartcodec import HeartCodecConfig
 from .models.flow_matching import FlowMatching
 from .models.sq_codec import ScalarModel
+
+
+class _DetailedTimer:
+    """Simple detailed timer for profiling."""
+
+    def __init__(self, name: str = "Timer"):
+        self.name = name
+        self.timings: list[tuple[str, float]] = []
+        self._start: float | None = None
+        self._current_label: str | None = None
+
+    def start(self) -> None:
+        self._start = time.perf_counter()
+
+    def lap(self, label: str) -> None:
+        if self._start is None:
+            self._start = time.perf_counter()
+            self._current_label = label
+            return
+        elapsed = time.perf_counter() - self._start
+        self.timings.append((self._current_label or label, elapsed))
+        self._start = time.perf_counter()
+        self._current_label = label
+
+    def stop(self, label: str = "end") -> None:
+        if self._start is not None:
+            elapsed = time.perf_counter() - self._start
+            self.timings.append((self._current_label or label, elapsed))
+
+    def summary(self) -> str:
+        total = sum(t[1] for t in self.timings)
+        lines = [f"\n=== {self.name} ===", f"{'step':<40} {'time':>8} {'pct':>6}"]
+        lines.append("-" * 60)
+        for label, elapsed in self.timings:
+            pct = elapsed / total * 100 if total > 0 else 0
+            lines.append(f"{label:<40} {elapsed:>7.3f}s {pct:>5.1f}%")
+        lines.append("-" * 60)
+        lines.append(f"{'TOTAL':<40} {total:>7.3f}s")
+        return "\n".join(lines)
 
 
 class HeartCodec(nn.Module):
@@ -68,6 +109,7 @@ class HeartCodec(nn.Module):
         num_steps: int = 10,
         disable_progress: bool = False,
         guidance_scale: float = 1.25,
+        _detailed_timing: bool = True,
     ) -> mx.array:
         """Convert RVQ codes to audio waveform.
 
@@ -80,9 +122,17 @@ class HeartCodec(nn.Module):
         Returns:
             (num_bands, num_samples) audio waveform
         """
+        timer = _DetailedTimer("detokenize") if _detailed_timing else None
+        if timer:
+            timer.start()
+
         codes = codes[None]  # add batch dim → (1, Q, T_codes)
+        if timer:
+            timer.lap("add_batch_dim")
 
         first_latent = mx.random.normal((codes.shape[0], int(duration * 25), 256))  # (B, T, 256)
+        if timer:
+            timer.lap("create_first_latent")
 
         first_latent_length = 0
         first_latent_codes_length = 0
@@ -98,7 +148,7 @@ class HeartCodec(nn.Module):
             while codes.shape[-1] < min_samples:
                 codes = mx.concatenate([codes, codes], axis=-1)
             codes = codes[:, :, :min_samples]
-        codes_len = codes.shape[-1]
+            codes_len = codes.shape[-1]
 
         if (codes_len - ovlp_frames) % hop_samples > 0:
             len_codes = (
@@ -108,11 +158,16 @@ class HeartCodec(nn.Module):
             while codes.shape[-1] < len_codes:
                 codes = mx.concatenate([codes, codes], axis=-1)
             codes = codes[:, :, :len_codes]
+        if timer:
+            timer.lap("pad_codes")
 
         latent_length = int(duration * 25)
         latent_list: list[mx.array] = []
 
+        # === PHASE 1: Flow Matching (generation des latents) ===
+        num_segments = 0
         for sinx in range(0, codes.shape[-1] - hop_samples + 1, hop_samples):
+            num_segments += 1
             codes_input = [codes[:, :, sinx : sinx + min_samples]]
 
             if sinx == 0 or ovlp_frames == 0:
@@ -150,20 +205,18 @@ class HeartCodec(nn.Module):
                     scenario="other_seg",
                 )
                 latent_list.append(latents)
-            # NOTE: inference_codes already evals its result internally
-            # (via _solve_euler), so latents are materialized for the next
-            # segment's overlap context.
+        if timer:
+            timer.lap(f"flow_matching ({num_segments} segments)")
 
         # Remove first_latent_length prefix from first segment
         latent_list[0] = latent_list[0][:, first_latent_length:, :]
 
-        # Decode each latent segment to audio and overlap-add
+        # === PHASE 2: Audio Decoding (c'est ici que ça ralentit) ===
         min_samples_audio = int(duration * self.sample_rate)
         hop_samples_audio = min_samples_audio // 93 * 80
         ovlp_samples_audio = min_samples_audio - hop_samples_audio
 
         output: mx.array | None = None
-        # Precompute crossfade window (constant for all segments)
         if ovlp_samples_audio > 0:
             _ov_win = mx.linspace(0, 1, ovlp_samples_audio)[None, :]
             _ov_win_inv = 1 - _ov_win
@@ -171,23 +224,41 @@ class HeartCodec(nn.Module):
             _ov_win = None
             _ov_win_inv = None
 
+        if timer:
+            timer.lap("setup_decode")
+
         for i, latent in enumerate(latent_list):
-            # latent: (B, T, 256)
-            # Reshape: (B, T, 2, 128) → permute → (B, 2, T, 128) → (2B, T, 128)
+            seg_timer = _DetailedTimer(f"segment_{i}") if _detailed_timing and i < 3 else None
+            if seg_timer:
+                seg_timer.start()
+
+            # Step 1: Reshape latent
             B, T_lat, F_lat = latent.shape
             latent = latent.reshape(B, T_lat, 2, F_lat // 2)
             latent = latent.transpose(0, 2, 1, 3)  # (B, 2, T, 128)
             latent = latent.reshape(B * 2, T_lat, F_lat // 2)  # (2B, T, 128)
+            if seg_timer:
+                seg_timer.lap("reshape_latent")
 
-            # scalar_model.decode expects (N, L, C) — our MLX layout
-            # Legacy does .transpose(1,2) because PyTorch uses (N,C,L)
-            cur_output = self.scalar_model.decode(latent)  # (2B, L_out, num_bands)
+            # Step 2: Decode with ScalarModel (C'EST LE COUTEAU QUI COUPE)
+            enable_profile = i < 2  # Profile only first 2 segments
+            cur_output = self.scalar_model.decode(
+                latent, _profile=enable_profile
+            )  # (2B, L_out, num_bands)
+            if seg_timer:
+                seg_timer.lap("scalar_model.decode")
+
             cur_output = cur_output.squeeze(-1)  # (2B, L_out) since num_bands=1
-
             cur_output = cur_output[:, :min_samples_audio]
-            mx.eval(cur_output)  # Eval per segment to bound graph size for long audio
+            if seg_timer:
+                seg_timer.lap("squeeze_and_slice")
 
-            # Remove batch dim if present
+            mx.eval(cur_output)  # Eval per segment to bound graph size for long audio
+            if seg_timer:
+                seg_timer.lap("mx.eval")
+                print(seg_timer.summary())
+
+            # Step 3: Overlap-add
             if cur_output.ndim == 3:
                 cur_output = cur_output[0]
 
@@ -197,10 +268,7 @@ class HeartCodec(nn.Module):
                 if ovlp_samples_audio == 0:
                     output = mx.concatenate([output, cur_output], axis=-1)
                 else:
-                    # Linear crossfade with precomputed window
                     assert _ov_win is not None and _ov_win_inv is not None
-
-                    # Blend overlap region
                     blended = (
                         output[:, -ovlp_samples_audio:] * _ov_win_inv
                         + cur_output[:, :ovlp_samples_audio] * _ov_win
@@ -214,11 +282,17 @@ class HeartCodec(nn.Module):
                         axis=-1,
                     )
 
+        if timer:
+            timer.lap(f"decode_and_overlap ({len(latent_list)} segments)")
+
         assert output is not None
         output = output[:, :target_len]
-        return output
+        if timer:
+            timer.lap("final_trim")
+            timer.stop()
+            print(timer.summary())
 
-    # -- loading helpers ----------------------------------------------------
+        return output
 
     @classmethod
     def from_pretrained(cls, path: str | Path, dtype: mx.Dtype = mx.float32) -> HeartCodec:

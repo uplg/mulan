@@ -19,15 +19,12 @@ import mlx.core as mx
 import mlx.nn as nn
 
 
-# ---------------------------------------------------------------------------
 # RMSNorm  (MLX ships nn.RMSNorm — we use it directly)
-# ---------------------------------------------------------------------------
+
 # nn.RMSNorm(dims, eps) — compatible with legacy RMSNorm.
 
 
-# ---------------------------------------------------------------------------
 # Rotary Embedding
-# ---------------------------------------------------------------------------
 
 
 def _build_rope_sin_cos(seq_len: int, dim: int, base: float = 10000.0) -> tuple[mx.array, mx.array]:
@@ -77,9 +74,7 @@ def _apply_rope_interleaved(
     return mx.concatenate([rot, tail], axis=-1)
 
 
-# ---------------------------------------------------------------------------
 # LlamaAttention
-# ---------------------------------------------------------------------------
 
 
 class LlamaAttention(nn.Module):
@@ -161,9 +156,7 @@ class LlamaAttention(nn.Module):
         return self.o_proj(out)
 
 
-# ---------------------------------------------------------------------------
 # LlamaMLP
-# ---------------------------------------------------------------------------
 
 
 class LlamaMLP(nn.Module):
@@ -187,9 +180,7 @@ class LlamaMLP(nn.Module):
         return self.down(nn.silu(self.gate(x)) * self.up(x))
 
 
-# ---------------------------------------------------------------------------
 # LlamaTransformerBlock
-# ---------------------------------------------------------------------------
 
 
 class LlamaTransformerBlock(nn.Module):
@@ -277,9 +268,7 @@ class LlamaTransformerBlock(nn.Module):
             return x
 
 
-# ---------------------------------------------------------------------------
 # ProjectLayer
-# ---------------------------------------------------------------------------
 
 
 class ProjectLayer(nn.Module):
@@ -307,9 +296,7 @@ class ProjectLayer(nn.Module):
         return x
 
 
-# ---------------------------------------------------------------------------
 # Timestep embeddings  (PixArt-style)
-# ---------------------------------------------------------------------------
 
 
 class TimestepEmbedding(nn.Module):
@@ -374,9 +361,7 @@ class AdaLayerNormSingleFlow(nn.Module):
         return self.linear(nn.silu(embedded_timestep)), embedded_timestep
 
 
-# ---------------------------------------------------------------------------
 # LlamaTransformer  (two-stage DiT)
-# ---------------------------------------------------------------------------
 
 
 class LlamaTransformer(nn.Module):
@@ -466,7 +451,6 @@ class LlamaTransformer(nn.Module):
     ) -> mx.array:
         s = self.proj_in(hidden_states)
 
-        # --- Stage 1 timestep conditioning ---
         embedded_timestep: mx.array | None = None
         timestep_mod: mx.array | None = None
         if timestep is not None:
@@ -487,11 +471,9 @@ class LlamaTransformer(nn.Module):
         s = self._layer_norm(s, self._norm_out_eps)
         s = s * (1 + scale) + shift
 
-        # --- Connection ---
         x = mx.concatenate([hidden_states, s], axis=-1)
         x = self.connection_proj(x)
 
-        # --- Stage 2 timestep conditioning ---
         embedded_timestep_2: mx.array | None = None
         timestep_mod_2: mx.array | None = None
         if timestep is not None:
