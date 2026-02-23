@@ -4,6 +4,8 @@ Use HeartMuLa (3B happy-new-year) on Apple silicon.
 
 [Demo](./demo.mp3)
 
+![Screenshot](./screenshot.jpg)
+
 ## Install :
 
 ```
