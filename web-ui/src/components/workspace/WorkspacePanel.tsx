@@ -37,7 +37,7 @@ export function WorkspacePanel() {
   };
 
   return (
-    <aside className="flex w-90 shrink-0 flex-col bg-background p-5">
+    <aside className="flex w-90 shrink-0 flex-col bg-background p-5 overflow-hidden">
       <div className="mb-5 flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Workspaces</span>
         <span className="text-sm text-muted-foreground">&rsaquo; My Workspace</span>
@@ -50,7 +50,7 @@ export function WorkspacePanel() {
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-auto border-0 bg-transparent p-0 text-sm focus-visible:ring-0"
+            className="h-auto border-0 bg-transparent p-0 text-sm focus-visible:ring-0 shadow-none"
           />
         </div>
         <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
@@ -68,7 +68,7 @@ export function WorkspacePanel() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {displaySongs.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
             {searchQuery ? "No songs match your search" : "Your generated songs will appear here"}

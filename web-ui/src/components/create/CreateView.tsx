@@ -344,7 +344,7 @@ export function CreateView() {
           >
             <div className="text-left">
               <div className="font-medium">{config.name}</div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className={cn("text-[10px]", activeConfig === key ? "text-primary-foreground/90" : "text-muted-foreground")}>
                 {config.description}
               </div>
             </div>
@@ -419,7 +419,7 @@ export function CreateView() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Song Title (Optional)"
-                className="h-auto border-0 bg-transparent p-0 text-sm focus-visible:ring-0"
+                className="h-auto border-0 bg-transparent p-0 text-sm focus-visible:ring-0 shadow-none"
               />
             </div>
 

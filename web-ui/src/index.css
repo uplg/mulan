@@ -47,39 +47,39 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  /* Dark-only app (music production UI) */
-  --background: #0a0a0a;
-  --foreground: #ffffff;
-  --card: #0f0f0f;
-  --card-foreground: #ffffff;
-  --popover: #0f0f0f;
-  --popover-foreground: #ffffff;
-  --primary: #e91e8c;
+  --radius: 0.75rem;
+  /* Modern Premium Hardware / Soft Neumorphic Dark Theme */
+  --background: #0a0a0c; 
+  --foreground: #f0f0f5;
+  --card: #121214;
+  --card-foreground: #f0f0f5;
+  --popover: #121214;
+  --popover-foreground: #f0f0f5;
+  --primary: #f82b73; /* Vibrant modern pink/magenta */
   --primary-foreground: #ffffff;
-  --secondary: #161616;
-  --secondary-foreground: #ffffff;
-  --muted: #161616;
-  --muted-foreground: #a0a0a0;
-  --accent: #1c1c1c;
+  --secondary: #1a1a1d;
+  --secondary-foreground: #f0f0f5;
+  --muted: #1a1a1d;
+  --muted-foreground: #8a8a93;
+  --accent: #2a2a30;
   --accent-foreground: #ffffff;
-  --destructive: #ff4444;
-  --border: #252525;
-  --input: #1a1a1a;
-  --ring: #e91e8c;
-  --chart-1: #e91e8c;
-  --chart-2: #00d4ff;
-  --chart-3: #ffd700;
-  --chart-4: #9b59b6;
-  --chart-5: #1db954;
-  --sidebar: #0f0f0f;
-  --sidebar-foreground: #a0a0a0;
-  --sidebar-primary: #e91e8c;
+  --destructive: #ff3344;
+  --border: #222226;
+  --input: #151518;
+  --ring: #f82b73;
+  --chart-1: #f82b73;
+  --chart-2: #00e5ff;
+  --chart-3: #ffcf00;
+  --chart-4: #a044ff;
+  --chart-5: #00e676;
+  --sidebar: #0f0f11;
+  --sidebar-foreground: #8a8a93;
+  --sidebar-primary: #f82b73;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #161616;
+  --sidebar-accent: #2a2a30;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #252525;
-  --sidebar-ring: #e91e8c;
+  --sidebar-border: #1a1a1d;
+  --sidebar-ring: #f82b73;
 }
 
 @layer base {
@@ -91,5 +91,150 @@
     font-family: var(--font-sans);
     min-height: 100vh;
     overflow: hidden;
+    /* Sleek modern studio background with a subtle central spotlight */
+    background-image: radial-gradient(circle at 50% 0%, #1a1a24 0%, #0a0a0c 80%);
+  }
+}
+
+@layer components {
+  /* Panels & Cards - Soft elevation, premium matte finish like modern synth gear */
+  .bg-card, [data-slot="card"], aside, header, .bg-sidebar, footer {
+    background: linear-gradient(145deg, #151518, #101012) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    box-shadow: 
+      -4px -4px 10px rgba(255, 255, 255, 0.01),
+      8px 8px 20px rgba(0, 0, 0, 0.4),
+      inset 1px 1px 0 rgba(255, 255, 255, 0.02) !important;
+  }
+
+  /* Base Button - Premium tactile soft-touch feel */
+  [data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"]) {
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+    background: linear-gradient(145deg, #222226, #1a1a1d) !important;
+    border: 1px solid rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 
+      -1px -1px 3px rgba(255, 255, 255, 0.04), /* top highlight */
+      4px 4px 10px rgba(0, 0, 0, 0.3), /* soft shadow */
+      inset 1px 1px 1px rgba(255, 255, 255, 0.03) !important;
+    color: #e0e0e0;
+    border-radius: var(--radius) !important;
+  }
+  
+  [data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"]):hover:not(:disabled) {
+    background: linear-gradient(145deg, #28282d, #1f1f22) !important;
+    box-shadow: 
+      -2px -2px 6px rgba(255, 255, 255, 0.05),
+      6px 6px 14px rgba(0, 0, 0, 0.4),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.05) !important;
+    color: #ffffff;
+  }
+
+  [data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"]):active:not(:disabled) {
+    transform: scale(0.97) !important;
+    background: #151518 !important;
+    box-shadow: 
+      inset 2px 2px 6px rgba(0, 0, 0, 0.5),
+      inset -1px -1px 2px rgba(255, 255, 255, 0.02) !important;
+  }
+
+  /* Primary Action Button - Glowing vibrant gel/silicone look */
+  [data-slot="button"][data-variant="default"],
+  [data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"])[data-variant="default"] {
+    background: linear-gradient(145deg, #ff3b80, #d91666) !important;
+    color: white !important;
+    border: 1px solid #b30f52 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 
+      0 4px 15px rgba(248, 43, 115, 0.3),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.4),
+      inset -1px -1px 4px rgba(0, 0, 0, 0.2) !important;
+  }
+  
+  [data-slot="button"][data-variant="default"]:hover:not(:disabled),
+  [data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"])[data-variant="default"]:hover:not(:disabled) {
+    background: linear-gradient(145deg, #ff5793, #e61a6f) !important;
+    box-shadow: 
+      0 6px 20px rgba(248, 43, 115, 0.45),
+      inset 1px 1px 3px rgba(255, 255, 255, 0.5),
+      inset -1px -1px 4px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  [data-slot="button"][data-variant="default"]:active:not(:disabled),
+  [data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"])[data-variant="default"]:active:not(:disabled) {
+    background: #c2125a !important;
+    box-shadow: 
+      0 2px 8px rgba(248, 43, 115, 0.2),
+      inset 2px 3px 8px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Inputs - Carved out smooth wells, elegant modern display */
+  [data-slot="input"], textarea, .bg-input {
+    background: #060608 !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    box-shadow: 
+      inset 2px 2px 6px rgba(0,0,0,0.6),
+      inset -1px -1px 2px rgba(255,255,255,0.02),
+      0 1px 0 rgba(255,255,255,0.02) !important;
+    transition: all 0.3s ease;
+    border-radius: var(--radius);
+  }
+  
+  [data-slot="input"]:focus, textarea:focus, .bg-input:focus-within {
+    border-color: rgba(248, 43, 115, 0.5) !important;
+    box-shadow: 
+      inset 2px 2px 6px rgba(0,0,0,0.6),
+      0 0 0 1px rgba(248, 43, 115, 0.3),
+      0 0 15px rgba(248, 43, 115, 0.15) !important;
+  }
+
+  /* Make specifically transparent inputs actually transparent */
+  [data-slot="input"].bg-transparent, textarea.bg-transparent {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  [data-slot="input"].bg-transparent:focus, textarea.bg-transparent:focus {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Progress / Sliders - Sleek recessed channels with glowing neon fills */
+  [data-slot="progress"], .bg-secondary {
+    background: #08080a !important;
+    border: 1px solid rgba(255,255,255,0.02) !important;
+    box-shadow: 
+      inset 1px 2px 5px rgba(0,0,0,0.8),
+      0 1px 0 rgba(255,255,255,0.03) !important;
+    border-radius: 999px !important;
+    overflow: hidden;
+  }
+  
+  [data-slot="progress"] > div {
+    background: linear-gradient(90deg, #ff3b80, #f82b73) !important;
+    box-shadow: 
+      0 0 12px rgba(248, 43, 115, 0.6),
+      inset 0 1px 2px rgba(255,255,255,0.4) !important;
+    border-radius: 999px !important;
+  }
+
+  /* Scrollbars - Minimalist and elegant */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.1);
+    border-radius: 4px;
+    margin: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2e;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #404046;
   }
 }
