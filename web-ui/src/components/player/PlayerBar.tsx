@@ -14,12 +14,23 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useApp } from "@/lib/store";
 import { api } from "@/lib/api";
+import { streamBus } from "@/lib/stream-bus";
 import { getAlbumArtStyle, formatDuration } from "@/lib/helpers";
 import { cn } from "@/lib/utils";
 
 export function PlayerBar() {
   const { state, dispatch } = useApp();
-  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // ---- Two <audio> elements for gapless double-buffering. ----
+  const audioARef = useRef<HTMLAudioElement>(null);
+  const audioBRef = useRef<HTMLAudioElement>(null);
+  /** Which element is currently active: "A" | "B". */
+  const activeRef = useRef<"A" | "B">("A");
+
+  const getActive = () =>
+    activeRef.current === "A" ? audioARef.current : audioBRef.current;
+  const getStandby = () =>
+    activeRef.current === "A" ? audioBRef.current : audioARef.current;
 
   const [currentTime, setCurrentTime] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
@@ -28,154 +39,246 @@ export function PlayerBar() {
   const [isShuffled, setIsShuffled] = useState(false);
   const [repeatMode, setRepeatMode] = useState<"none" | "all" | "one">("none");
 
-  const isStreaming = state.streamingSegments.length > 0;
-
-  // ---- Refs that let the single "ended" handler read fresh values
-  //      without re-subscribing the listener on every render. ----
-  const streamSegmentsRef = useRef(state.streamingSegments);
-  streamSegmentsRef.current = state.streamingSegments;
-
-  /** Index of the segment currently loaded in <audio> (-1 = none). */
+  // ---- Refs for stable access from event handlers registered once. ----
   const streamIndexRef = useRef(-1);
-
-  /** Cumulative playback time of all *completed* segments. */
+  const preloadedIndexRef = useRef(-1);
   const streamBaseTimeRef = useRef(0);
-
   const repeatModeRef = useRef(repeatMode);
   repeatModeRef.current = repeatMode;
+  const isStreamingRef = useRef(state.isStreaming);
+  isStreamingRef.current = state.isStreaming;
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+  /** Pending seek position — consumed once after the next loadedmetadata event. */
+  const pendingSeekRef = useRef<number | null>(null);
 
-  const isStreamingRef = useRef(isStreaming);
-  isStreamingRef.current = isStreaming;
+  // ---- Volume helper ----
+  const applyVolume = (el: HTMLAudioElement) => {
+    el.volume = isMutedRef.current ? 0 : volumeRef.current / 100;
+  };
 
-  // ---- Load a normal (non-streaming) track ----
+  // ---- Preload next segment onto standby element. ----
+  const preloadNext = () => {
+    const segs = streamBus.segments;
+    const nextIdx = streamIndexRef.current + 1;
+    if (nextIdx >= segs.length) return;
+    if (preloadedIndexRef.current === nextIdx) return;
+
+    const standby = getStandby();
+    if (!standby) return;
+
+    preloadedIndexRef.current = nextIdx;
+    standby.src = segs[nextIdx];
+    standby.preload = "auto";
+    applyVolume(standby);
+  };
+
+  // ---- Swap active ↔ standby. ----
+  const swapToStandby = () => {
+    const segs = streamBus.segments;
+    const nextIdx = streamIndexRef.current + 1;
+    if (nextIdx >= segs.length) return;
+
+    const active = getActive();
+    const standby = getStandby();
+    if (!active || !standby) return;
+
+    streamBaseTimeRef.current += active.duration || 0;
+    activeRef.current = activeRef.current === "A" ? "B" : "A";
+    streamIndexRef.current = nextIdx;
+    preloadedIndexRef.current = -1;
+
+    applyVolume(standby);
+    standby.play().catch(() => {});
+
+    preloadNext();
+  };
+
+  // Store swap in a ref so the ended listener (registered once) always
+  // calls the latest version without needing to re-subscribe.
+  const swapRef = useRef(swapToStandby);
+  swapRef.current = swapToStandby;
+
+  // ---- Sync volume to both elements. ----
   useEffect(() => {
-    const audio = audioRef.current;
+    const v = isMuted ? 0 : volume / 100;
+    if (audioARef.current) audioARef.current.volume = v;
+    if (audioBRef.current) audioBRef.current.volume = v;
+  }, [volume, isMuted]);
+
+  // ---- Load a normal (non-streaming) track on audioA. ----
+  useEffect(() => {
+    const audio = audioARef.current;
     if (!audio || !state.currentTrack) return;
-    if (isStreaming) return;
+    if (state.isStreaming) return;
+    activeRef.current = "A";
     streamIndexRef.current = -1;
     streamBaseTimeRef.current = 0;
+    preloadedIndexRef.current = -1;
+    pendingSeekRef.current = state.seekTo;
     audio.src = api.audioUrl(state.currentTrack.filename);
+    applyVolume(audio);
     audio.play().catch(() => {});
-  }, [state.currentTrack, isStreaming]);
+    // Clear seekTo from state so it doesn't re-trigger
+    if (state.seekTo !== null) {
+      dispatch({ type: "CLEAR_SEEK" });
+    }
+  }, [state.currentTrack, state.isStreaming]);
 
-  // ---- Streaming: load first segment once ----
+  // ---- Subscribe to streamBus for segment notifications. ----
+  // Registered once. The callback reads streamBus.segments imperatively.
   useEffect(() => {
-    const audio = audioRef.current;
+    const audio = audioARef.current;
     if (!audio) return;
 
-    if (state.streamingSegments.length === 0) {
-      streamIndexRef.current = -1;
-      streamBaseTimeRef.current = 0;
-      return;
-    }
+    streamBus.onSegment = () => {
+      const segs = streamBus.segments;
 
-    // Load the very first segment only once.
-    if (streamIndexRef.current === -1) {
-      streamIndexRef.current = 0;
-      streamBaseTimeRef.current = 0;
-      audio.src = state.streamingSegments[0];
-      audio.play().catch(() => {});
-    }
-  }, [state.streamingSegments]);
+      // First segment — start playback on audioA.
+      if (streamIndexRef.current === -1 && segs.length > 0) {
+        activeRef.current = "A";
+        streamIndexRef.current = 0;
+        streamBaseTimeRef.current = 0;
+        preloadedIndexRef.current = -1;
+        audio.src = segs[0];
+        applyVolume(audio);
+        audio.play().catch(() => {});
+      }
 
-  // ---- Streaming: when a segment finishes but the next wasn't available
-  //      yet, this effect detects the new segment arrived and loads it. ----
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !isStreaming) return;
-
-    const idx = streamIndexRef.current;
-    if (idx < 0) return;
-
-    const nextIdx = idx + 1;
-    const haveNext = nextIdx < state.streamingSegments.length;
-    // audio.ended is true when the segment played through completely.
-    if (haveNext && audio.ended) {
-      streamBaseTimeRef.current += audio.duration || 0;
-      streamIndexRef.current = nextIdx;
-      audio.src = state.streamingSegments[nextIdx];
-      audio.play().catch(() => {});
-    }
-  }, [state.streamingSegments, isStreaming]);
-
-  // ---- Single "ended" handler — registered ONCE, reads refs. ----
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onEnded = () => {
-      if (isStreamingRef.current) {
-        // Streaming mode: advance to next segment if available.
-        const segs = streamSegmentsRef.current;
+      // If the active element has ended (segment finished before next
+      // arrived from the server), swap now.
+      const active = getActive();
+      if (active?.ended) {
         const nextIdx = streamIndexRef.current + 1;
         if (nextIdx < segs.length) {
-          streamBaseTimeRef.current += audio.duration || 0;
-          streamIndexRef.current = nextIdx;
-          audio.src = segs[nextIdx];
-          audio.play().catch(() => {});
+          swapRef.current();
+          return;
         }
-        // else: wait — the "new segment arrived" effect above will pick it up.
+      }
+
+      // Otherwise just try to preload the next segment onto standby.
+      preloadNext();
+    };
+
+    return () => {
+      streamBus.onSegment = null;
+    };
+  }, []);
+
+  // ---- When streaming stops (state.isStreaming false), reset indices. ----
+  useEffect(() => {
+    if (!state.isStreaming) {
+      streamIndexRef.current = -1;
+      streamBaseTimeRef.current = 0;
+      preloadedIndexRef.current = -1;
+      activeRef.current = "A";
+    }
+  }, [state.isStreaming]);
+
+  // ---- Single "ended" handler — registered ONCE, uses refs. ----
+  useEffect(() => {
+    const a = audioARef.current;
+    const b = audioBRef.current;
+    if (!a || !b) return;
+
+    const onEnded = (e: Event) => {
+      const el = e.currentTarget as HTMLAudioElement;
+      if (el !== getActive()) return; // ignore stale standby events
+
+      if (isStreamingRef.current) {
+        const segs = streamBus.segments;
+        const nextIdx = streamIndexRef.current + 1;
+        if (nextIdx < segs.length) {
+          swapRef.current();
+        } else {
+          // Last segment just finished — streaming playback is over.
+          // CreateView's onComplete already handles the transition to
+          // the final track; if it hasn't fired yet, it will find
+          // isStreaming = false and handle accordingly.
+          dispatch({ type: "SET_STREAMING", isStreaming: false });
+        }
         return;
       }
 
-      // Normal library playback
+      // Normal library playback.
       if (repeatModeRef.current === "one") {
-        audio.currentTime = 0;
-        audio.play();
+        el.currentTime = 0;
+        el.play();
       } else {
-        // handleNext is expensive to close over stably, so we dispatch
-        // a lightweight action and let the next-track effect below handle it.
         handleNextRef.current();
       }
     };
 
-    audio.addEventListener("ended", onEnded);
-    return () => audio.removeEventListener("ended", onEnded);
-  }, []); // registered once, never re-subscribed
-
-  // ---- Time / metadata updates ----
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onTimeUpdate = () => {
-      if (isStreamingRef.current) {
-        setCurrentTime(streamBaseTimeRef.current + audio.currentTime);
-      } else {
-        setCurrentTime(audio.currentTime);
-      }
-    };
-
-    const onLoadedMetadata = () => {
-      if (!isStreamingRef.current) {
-        setTotalDuration(audio.duration);
-      }
-      // During streaming we don't update totalDuration per-segment
-      // because we don't know the full duration yet.
-    };
-
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    a.addEventListener("ended", onEnded);
+    b.addEventListener("ended", onEnded);
     return () => {
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      a.removeEventListener("ended", onEnded);
+      b.removeEventListener("ended", onEnded);
+    };
+  }, []); // truly registered once — never re-subscribes
+
+  // ---- Time / metadata — listen on BOTH, report from active only. ----
+  useEffect(() => {
+    const a = audioARef.current;
+    const b = audioBRef.current;
+    if (!a || !b) return;
+
+    const onTimeUpdate = (e: Event) => {
+      const el = e.currentTarget as HTMLAudioElement;
+      if (el !== getActive()) return;
+      if (isStreamingRef.current) {
+        const t = streamBaseTimeRef.current + el.currentTime;
+        setCurrentTime(t);
+        // Write to bus imperatively — no dispatch, no re-render.
+        streamBus.time = t;
+      } else {
+        setCurrentTime(el.currentTime);
+      }
+    };
+
+    const onLoadedMetadata = (e: Event) => {
+      const el = e.currentTarget as HTMLAudioElement;
+      if (el !== getActive()) return;
+      if (!isStreamingRef.current) {
+        setTotalDuration(el.duration);
+        // If a seek was requested (e.g. seamless transition from streaming),
+        // apply it now that metadata is available.
+        const seekPos = pendingSeekRef.current;
+        if (seekPos !== null && seekPos > 0 && seekPos < el.duration) {
+          el.currentTime = seekPos;
+          pendingSeekRef.current = null;
+        }
+      }
+    };
+
+    for (const el of [a, b]) {
+      el.addEventListener("timeupdate", onTimeUpdate);
+      el.addEventListener("loadedmetadata", onLoadedMetadata);
+    }
+    return () => {
+      for (const el of [a, b]) {
+        el.removeEventListener("timeupdate", onTimeUpdate);
+        el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      }
     };
   }, []);
 
   // ---- Sync play/pause ----
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const active = getActive();
+    if (!active) return;
     if (state.isPlaying) {
-      audio.play().catch(() => {});
+      active.play().catch(() => {});
     } else {
-      audio.pause();
+      active.pause();
     }
   }, [state.isPlaying]);
 
   // ---- Library navigation ----
   const handleNext = useCallback(() => {
-    if (isStreamingRef.current) return; // don't skip during streaming
+    if (isStreamingRef.current) return;
     const idx = state.songs.findIndex(
       (s) => s.filename === state.currentTrack?.filename,
     );
@@ -191,7 +294,7 @@ export function PlayerBar() {
 
   const handlePrev = useCallback(() => {
     if (isStreamingRef.current) return;
-    const audio = audioRef.current;
+    const audio = getActive();
     if (audio && audio.currentTime > 3) {
       audio.currentTime = 0;
       return;
@@ -209,8 +312,8 @@ export function PlayerBar() {
   };
 
   const handleSeek = (value: number[]) => {
-    const audio = audioRef.current;
-    if (audio && totalDuration && !isStreaming) {
+    const audio = getActive();
+    if (audio && totalDuration && !state.isStreaming) {
       audio.currentTime = (value[0] / 100) * totalDuration;
     }
   };
@@ -219,19 +322,10 @@ export function PlayerBar() {
     const v = value[0];
     setVolume(v);
     setIsMuted(v === 0);
-    if (audioRef.current) audioRef.current.volume = v / 100;
   };
 
   const toggleMute = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isMuted) {
-      audio.volume = volume / 100;
-      setIsMuted(false);
-    } else {
-      audio.volume = 0;
-      setIsMuted(true);
-    }
+    setIsMuted((prev) => !prev);
   };
 
   const handleDownload = () => {
@@ -243,13 +337,21 @@ export function PlayerBar() {
     a.click();
   };
 
-  if (!state.currentTrack && !isStreaming) return <audio ref={audioRef} />;
+  if (!state.currentTrack && !state.isStreaming) {
+    return (
+      <>
+        <audio ref={audioARef} />
+        <audio ref={audioBRef} />
+      </>
+    );
+  }
 
   const progressPercent = totalDuration ? (currentTime / totalDuration) * 100 : 0;
 
   return (
     <>
-      <audio ref={audioRef} />
+      <audio ref={audioARef} />
+      <audio ref={audioBRef} />
       <div className="fixed bottom-0 left-0 right-0 z-50 flex h-22.5 items-center gap-4 border-t border-white/5 bg-linear-to-b from-[#181818] to-[#121212] px-4">
         <div className="flex w-55 min-w-55 items-center gap-3.5">
           <div
@@ -258,10 +360,10 @@ export function PlayerBar() {
           />
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">
-              {state.currentTrack?.title ?? (isStreaming ? "Generating..." : "")}
+              {state.currentTrack?.title ?? (state.isStreaming ? "Generating..." : "")}
             </div>
             <div className="truncate text-xs text-muted-foreground">
-              {isStreaming ? "Streaming preview" : "HeartMuLa"}
+              {state.isStreaming ? "Streaming preview" : "HeartMuLa"}
             </div>
           </div>
         </div>
@@ -323,7 +425,7 @@ export function PlayerBar() {
               className="flex-1"
             />
             <span className="min-w-10 text-[11px] tabular-nums text-muted-foreground">
-              {isStreaming ? "..." : formatDuration(totalDuration)}
+              {state.isStreaming ? "..." : formatDuration(totalDuration)}
             </span>
           </div>
         </div>

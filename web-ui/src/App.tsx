@@ -39,7 +39,7 @@ function AppContent() {
 
       <PlayerBar />
 
-      {(state.currentTrack || state.streamingSegments.length > 0) && <div className="h-22.5 shrink-0" />}
+      {(state.currentTrack || state.isStreaming) && <div className="h-22.5 shrink-0" />}
     </div>
   );
 }

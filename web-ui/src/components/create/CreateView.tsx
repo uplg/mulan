@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useApp } from "@/lib/store";
 import { api, type AudioChunkInfo } from "@/lib/api";
+import { streamBus } from "@/lib/stream-bus";
 import { cn } from "@/lib/utils";
 
 const STYLE_TAGS = [
@@ -138,7 +139,8 @@ export function CreateView() {
     // Reset streaming state
     for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
     segmentUrlsRef.current = [];
-    dispatch({ type: "CLEAR_STREAMING_SEGMENTS" });
+    streamBus.clear();
+    dispatch({ type: "SET_STREAMING", isStreaming: false });
 
     const controller = new AbortController();
     generateAbortRef.current = controller;
@@ -171,10 +173,13 @@ export function CreateView() {
             const blob = new Blob([chunk.bytes as BlobPart], { type: mimeType });
             const url = URL.createObjectURL(blob);
             segmentUrlsRef.current.push(url);
-            dispatch({ type: "PUSH_STREAMING_SEGMENT", url });
 
-            // Auto-play on first chunk
+            // Push to the imperative bus — no React re-render
+            streamBus.push(url);
+
+            // Mark streaming active on first chunk (single state update)
             if (chunk.segment === 0) {
+              dispatch({ type: "SET_STREAMING", isStreaming: true });
               dispatch({ type: "SET_PLAYING", isPlaying: true });
             }
 
@@ -189,17 +194,20 @@ export function CreateView() {
             dispatch({ type: "SET_GENERATING", isGenerating: false });
             dispatch({ type: "SET_PROGRESS", progress: 1, message: "Complete!" });
 
-            // Clean up streaming segment URLs
+            // Capture current streaming playback position for seamless seek
+            const seekPos = streamBus.time;
+
+            // Clean up streaming segment blob URLs
             for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
             segmentUrlsRef.current = [];
-            dispatch({ type: "CLEAR_STREAMING_SEGMENTS" });
+            streamBus.clear();
 
-            // Reload songs and play the final file
+            // Reload songs and play the final file, seeking to where we were
             const data = await api.getSongs();
             dispatch({ type: "SET_SONGS", songs: data.songs });
             const newSong = data.songs.find((s) => s.filename === evt.filename);
             if (newSong) {
-              dispatch({ type: "PLAY_TRACK", track: newSong });
+              dispatch({ type: "PLAY_TRACK", track: newSong, seekTo: seekPos });
             }
           },
           onCancelled: () => {
@@ -208,7 +216,8 @@ export function CreateView() {
             dispatch({ type: "SET_PROGRESS", progress: 0, message: "Cancelled" });
             for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
             segmentUrlsRef.current = [];
-            dispatch({ type: "CLEAR_STREAMING_SEGMENTS" });
+            streamBus.clear();
+            dispatch({ type: "SET_STREAMING", isStreaming: false });
           },
           onError: (error) => {
             console.error("Stream error:", error);
