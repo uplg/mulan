@@ -133,8 +133,9 @@ class KVCache:
         return self.k_cache, self.v_cache
 
     def reset(self) -> None:
-        self.k_cache = mx.zeros_like(self.k_cache)
-        self.v_cache = mx.zeros_like(self.v_cache)
+        # Just reset position — old data beyond pos is never read by attention
+        # (attention only reads up to self.pos), and gets overwritten by update().
+        # Avoids allocating new mx.zeros_like tensors (7x per frame in decoder).
         self.pos = 0
 
 
@@ -159,6 +160,7 @@ class MultiHeadAttention(nn.Module):
         self.num_kv_heads = num_kv_heads
         self.head_dim = head_dim
         self.q_per_kv = num_heads // num_kv_heads
+        self._scale = math.sqrt(head_dim)
 
         self.q_proj = nn.Linear(embed_dim, num_heads * head_dim, bias=False)
         self.k_proj = nn.Linear(embed_dim, num_kv_heads * head_dim, bias=False)
@@ -248,9 +250,7 @@ class MultiHeadAttention(nn.Module):
                 k, v = self._kv_cache.update(k, v)
 
         # Scaled dot-product attention.
-        scale = math.sqrt(self.head_dim)
-
-        scores = (q @ k.transpose(0, 1, 3, 2)) / scale  # [B, H, S_x, S_kv]
+        scores = (q @ k.transpose(0, 1, 3, 2)) / self._scale  # [B, H, S_x, S_kv]
 
         if mask is not None:
             # mask: [B, S_x, S_kv] bool — True means attend
@@ -505,6 +505,10 @@ class HeartMuLa(nn.Module):
         self._backbone_causal_mask: mx.array | None = None
         self._decoder_causal_mask: mx.array | None = None
 
+        # Precomputed decoder curr_pos tensors (set by setup_caches)
+        self._decoder_pos_init: mx.array | None = None  # [1, 2] for initial 2-token input
+        self._decoder_pos_step: list[mx.array] = []  # [1, 1] for each codebook step
+
     # -- cache setup --------------------------------------------------------
 
     def setup_caches(self, max_batch_size: int) -> None:
@@ -516,6 +520,12 @@ class HeartMuLa(nn.Module):
         )
         self._backbone_causal_mask = _create_causal_mask(self.backbone.max_seq_len)
         self._decoder_causal_mask = _create_causal_mask(self.config.audio_num_codebooks)
+
+        # Precompute decoder position tensors (batch-broadcast at generate_frame time)
+        self._decoder_pos_init = mx.arange(2)[None, :]  # [1, 2]
+        self._decoder_pos_step = [
+            mx.array([[i + 2]]) for i in range(self.config.audio_num_codebooks - 1)
+        ]  # [1, 1] each
 
     def reset_caches(self) -> None:
         self.backbone.reset_caches()
@@ -647,8 +657,8 @@ class HeartMuLa(nn.Module):
         curr_sample = c0_sample  # [B, 1]
 
         curr_pos = mx.broadcast_to(
-            mx.arange(curr_h.shape[1])[None, :],
-            (curr_h.shape[0], curr_h.shape[1]),
+            cast(mx.array, self._decoder_pos_init),
+            (curr_h.shape[0], 2),
         )  # [B, 2]
 
         for i in range(1, self.config.audio_num_codebooks):
@@ -671,7 +681,10 @@ class HeartMuLa(nn.Module):
             ci_embed = self._embed_audio(i, ci_sample)
             curr_h = ci_embed
             curr_sample = mx.concatenate([curr_sample, ci_sample], axis=1)
-            curr_pos = curr_pos[:, -1:] + 1
+            curr_pos = mx.broadcast_to(
+                self._decoder_pos_step[i - 1],
+                (curr_h.shape[0], 1),
+            )
 
         return curr_sample
 

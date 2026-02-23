@@ -39,10 +39,14 @@ class Snake1d(nn.Module):
     def __init__(self, channels: int):
         super().__init__()
         self.alpha = mx.ones((1, 1, channels))
+        self._alpha_recip: mx.array | None = None
 
     def __call__(self, x: mx.array) -> mx.array:
         alpha = self.alpha
-        return x + (alpha + 1e-9).reciprocal() * mx.power(mx.sin(alpha * x), 2)
+        # Lazy-cache reciprocal (alpha is a loaded weight, stable after load_weights)
+        if self._alpha_recip is None:
+            self._alpha_recip = (alpha + 1e-9).reciprocal()
+        return x + self._alpha_recip * mx.power(mx.sin(alpha * x), 2)
 
 
 # ---------------------------------------------------------------------------

@@ -212,21 +212,16 @@ class FlowMatching(nn.Module):
         # Random noise
         latents = mx.random.normal((B, num_frames, self.latent_dim))
 
-        # Build masks
-        latent_masks = mx.zeros((B, num_frames), dtype=mx.int32)
-        # latent_masks[:, 0:latent_length] = 2
-        mask_2 = mx.zeros((B, num_frames), dtype=mx.int32)
-        if latent_length > 0:
-            mask_2 = mask_2.at[:, :latent_length].add(2)
-        latent_masks = mask_2
+        # Build masks using vectorised comparisons (no .at[].add() allocations)
+        frame_idx = mx.arange(num_frames)[None, :]  # [1, T], broadcasts over B
+        latent_masks = mx.where(frame_idx < latent_length, 2, 0).astype(mx.int32)
 
         if scenario == "other_seg" and incontext_length > 0:
-            # Set 0:incontext_length to 1
-            mask_1 = mx.zeros((B, num_frames), dtype=mx.int32)
-            mask_1 = mask_1.at[:, :incontext_length].add(1)
-            # Where currently == 2 and index < incontext_length → set to 1
-            is_in_context = mx.arange(num_frames)[None, :] < incontext_length
-            latent_masks = mx.where(is_in_context, mx.ones_like(latent_masks), latent_masks)
+            latent_masks = mx.where(
+                frame_idx < incontext_length,
+                mx.array(1, dtype=mx.int32),
+                latent_masks,
+            )
 
         # Apply conditioning mask
         mask_gt_half = (latent_masks > 0)[..., None]  # (B, T, 1)
@@ -282,6 +277,12 @@ class FlowMatching(nn.Module):
         dt = t_span[1] - t_span[0]
         noise = x  # keep reference to initial noise
 
+        # Precompute CFG constants used every step
+        if guidance_scale > 1.0:
+            mu_zeros = mx.zeros_like(mu)
+        else:
+            mu_zeros = mu  # unused placeholder, never read in else branch
+
         for step in range(1, t_span.shape[0]):
             # Blend in-context region
             if incontext_length > 0:
@@ -299,7 +300,7 @@ class FlowMatching(nn.Module):
                 # Classifier-free guidance: run conditional + unconditional
                 x_double = mx.concatenate([x, x], axis=0)
                 ic_double = mx.concatenate([incontext_x, incontext_x], axis=0)
-                mu_double = mx.concatenate([mx.zeros_like(mu), mu], axis=0)
+                mu_double = mx.concatenate([mu_zeros, mu], axis=0)
                 combined = mx.concatenate([x_double, ic_double, mu_double], axis=2)
                 t_input = mx.broadcast_to(t.reshape(1), (2,))
 

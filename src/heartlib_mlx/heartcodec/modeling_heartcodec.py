@@ -163,6 +163,14 @@ class HeartCodec(nn.Module):
         ovlp_samples_audio = min_samples_audio - hop_samples_audio
 
         output: mx.array | None = None
+        # Precompute crossfade window (constant for all segments)
+        if ovlp_samples_audio > 0:
+            _ov_win = mx.linspace(0, 1, ovlp_samples_audio)[None, :]
+            _ov_win_inv = 1 - _ov_win
+        else:
+            _ov_win = None
+            _ov_win_inv = None
+
         for i, latent in enumerate(latent_list):
             # latent: (B, T, 256)
             # Reshape: (B, T, 2, 128) → permute → (B, 2, T, 128) → (2B, T, 128)
@@ -189,14 +197,13 @@ class HeartCodec(nn.Module):
                 if ovlp_samples_audio == 0:
                     output = mx.concatenate([output, cur_output], axis=-1)
                 else:
-                    # Linear crossfade
-                    ov_win = mx.linspace(0, 1, ovlp_samples_audio)[None, :]
-                    ov_win_inv = 1 - ov_win
+                    # Linear crossfade with precomputed window
+                    assert _ov_win is not None and _ov_win_inv is not None
 
                     # Blend overlap region
                     blended = (
-                        output[:, -ovlp_samples_audio:] * ov_win_inv
-                        + cur_output[:, :ovlp_samples_audio] * ov_win
+                        output[:, -ovlp_samples_audio:] * _ov_win_inv
+                        + cur_output[:, :ovlp_samples_audio] * _ov_win
                     )
                     output = mx.concatenate(
                         [
