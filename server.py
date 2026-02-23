@@ -439,26 +439,23 @@ def _generate_music_sync(
     gen_state.message = "Generating..."
 
     # Decompose the pipeline to update progress between stages.
-    with prof.section("preprocess"):
-        preprocess_kw = {"cfg_scale": cfg_scale}
-        model_inputs = pipeline.preprocess({"tags": tags, "lyrics": lyrics}, **preprocess_kw)
+    preprocess_kw = {"cfg_scale": cfg_scale}
+    model_inputs = pipeline.preprocess({"tags": tags, "lyrics": lyrics}, **preprocess_kw)
 
-    with prof.section("forward"):
-        model_outputs = pipeline._forward(
-            model_inputs,
-            max_audio_length_ms=duration * 1000,
-            temperature=temperature,
-            topk=topk,
-            cfg_scale=cfg_scale,
-            progress_callback=on_progress,
-            cancel_check=is_cancelled,
-        )
+    model_outputs = pipeline._forward(
+        model_inputs,
+        max_audio_length_ms=duration * 1000,
+        temperature=temperature,
+        topk=topk,
+        cfg_scale=cfg_scale,
+        progress_callback=on_progress,
+        cancel_check=is_cancelled,
+    )
 
     gen_state.progress = 0.90
     gen_state.message = "Decoding audio..."
 
-    with prof.section("postprocess"):
-        pipeline.postprocess(model_outputs, save_path=str(output_path))
+    pipeline.postprocess(model_outputs, save_path=str(output_path))
 
     gen_state.progress = 0.95
     gen_state.message = "Saving file..."
@@ -469,16 +466,15 @@ def _generate_music_sync(
 
     # Convert WAV → MP3 for faster delivery (~10x smaller)
     served_filename = filename
-    with prof.section("mp3_convert"):
-        if _check_ffmpeg():
-            mp3_path = output_path.with_suffix(".mp3")
-            if _convert_wav_to_mp3(output_path, mp3_path):
-                served_filename = mp3_path.name
-                logger.info(
-                    "Converted to MP3: %.1f MB → %.1f MB",
-                    output_path.stat().st_size / 1e6,
-                    mp3_path.stat().st_size / 1e6,
-                )
+    if _check_ffmpeg():
+        mp3_path = output_path.with_suffix(".mp3")
+        if _convert_wav_to_mp3(output_path, mp3_path):
+            served_filename = mp3_path.name
+            logger.info(
+                "Converted to MP3: %.1f MB → %.1f MB",
+                output_path.stat().st_size / 1e6,
+                mp3_path.stat().st_size / 1e6,
+            )
 
     _save_song_metadata(served_filename, title, styles, lyrics, actual_duration)
 
@@ -486,13 +482,7 @@ def _generate_music_sync(
     gen_state.progress = 1.0
     gen_state.message = "Complete!"
 
-    prof.summary()
-
     return served_filename, num_frames, actual_duration, elapsed
-
-
-# Lifespan
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -500,10 +490,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pipeline = _load_pipeline()
     yield
     app.state.pipeline = None
-
-
-# App & middleware
-
 
 app = FastAPI(
     title="HeartMuLa MLX API",
@@ -519,12 +505,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# API router — mounted under /api
-
-
 router = APIRouter(prefix="/api", tags=["api"])
-
 
 @router.get("/status", response_model=StatusResponse)
 async def get_status() -> StatusResponse:

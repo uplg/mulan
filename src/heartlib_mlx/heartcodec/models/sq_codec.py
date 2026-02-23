@@ -9,33 +9,14 @@ plain Conv1d / ConvTranspose1d with the *effective* weight already stored.
 
 from __future__ import annotations
 
-import math
-import time
 from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
 
 
-def _time_layers(layers: list, x: mx.array, name: str = "layer") -> mx.array:
-    """Time each layer in a list for profiling."""
-    for i, layer in enumerate(layers):
-        t0 = time.perf_counter()
-        x = layer(x)
-        t1 = time.perf_counter()
-        print(f"  {name}_{i}: {(t1 - t0) * 1000:.2f}ms")
-    return x
-
-
-# Helpers
-
-
 def _get_padding(kernel_size: int, dilation: int = 1) -> int:
     return (kernel_size * dilation - dilation) // 2
-
-
-# Activation: Snake
-
 
 class Snake1d(nn.Module):
     """Snake activation: x + (1/alpha) * sin(alpha * x)^2.
@@ -54,10 +35,6 @@ class Snake1d(nn.Module):
         if self._alpha_recip is None:
             self._alpha_recip = (alpha + 1e-9).reciprocal()
         return x + self._alpha_recip * mx.power(mx.sin(alpha * x), 2)
-
-
-# CausalConv1d  /  CausalConvTranspose1d
-
 
 class CausalConv1d(nn.Module):
     """Conv1d with causal (left-only) padding.
@@ -209,9 +186,6 @@ class ConvTranspose1d(nn.Module):
         return self.impl(x)
 
 
-# PReLU (MLX doesn't ship one)
-
-
 class PReLU(nn.Module):
     """Parametric ReLU. Weight shape (C,) broadcast over (N, L, C)."""
 
@@ -221,10 +195,6 @@ class PReLU(nn.Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         return mx.where(x >= 0, x, self.weight * x)
-
-
-# Building blocks
-
 
 class PreProcessor(nn.Module):
     def __init__(
@@ -399,17 +369,9 @@ class ResDecoderBlock(nn.Module):
             x = conv(x)
         return x
 
-
-# round_func9 (inference only -- no STE needed)
-
-
 def round_func9(x: mx.array) -> mx.array:
     """Scalar quantisation: round(9*x)/9."""
     return mx.round(9.0 * x) / 9.0
-
-
-# ScalarModel
-
 
 class ScalarModel(nn.Module):
     """The SQ-Codec encoder + decoder with scalar VQ.

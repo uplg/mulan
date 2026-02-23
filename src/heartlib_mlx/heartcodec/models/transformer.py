@@ -13,7 +13,6 @@ Key differences from standard Llama:
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -162,8 +161,6 @@ class LlamaMLP(nn.Module):
     def __call__(self, x: mx.array) -> mx.array:
         return self.down(nn.silu(self.gate(x)) * self.up(x))
 
-
-# LlamaTransformerBlock
 class LlamaTransformerBlock(nn.Module):
     """Transformer block with optional PixArt-style AdaLayerNorm single."""
 
