@@ -4,9 +4,6 @@ Use HeartMuLa (3B happy-new-year) on Apple silicon.
 
 [Demo](./demo.mp3)
 
-## TODO:
-- [ ] Streaming output web-ui buggy (skip to next when decoding is in progress)
-
 ## Install :
 
 ```

@@ -1,8 +1,5 @@
 The goal of this project is to create a "state of the art" frontend to use the HeartMuLa MLX model.
 
-TODO:
-Stream MP3 while decode ? (Suno like)
-
 You need to split in correct minimal steps.
 
 Don't overthink.
