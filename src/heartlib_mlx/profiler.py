@@ -16,6 +16,10 @@ Usage::
         pipeline.postprocess(model_outputs, save_path="out.wav")
 
     prof.summary()  # prints a clean table to stderr
+
+Zero-overhead by default: uses wall-clock only, no GPU sync barriers.
+The pipeline's own ``mx.eval`` calls are the natural sync points, so
+section boundaries already align with real GPU work completion.
 """
 
 from __future__ import annotations
@@ -25,8 +29,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Iterator
-
-import mlx.core as mx
 
 logger = logging.getLogger("heartmula.profiler")
 
@@ -43,21 +45,20 @@ class _Entry:
 class Profiler:
     """Accumulates wall-clock timings for named sections.
 
-    Each ``section`` context manager calls ``mx.eval()`` on entry *and* exit
-    so that GPU work from a previous section doesn't bleed into the next
-    measurement.  This gives honest per-section timings at the cost of a
-    sync barrier — use only for profiling, not production.
+    No ``mx.synchronize()`` calls — zero overhead.  The pipeline already
+    calls ``mx.eval`` at the end of each stage (forward evals per frame,
+    postprocess evals before ``sf.write``), so wall-clock deltas between
+    sections give accurate-enough breakdowns without adding sync barriers
+    that would destroy GPU pipelining.
     """
 
     _entries: list[_Entry] = field(default_factory=list)
 
     @contextmanager
     def section(self, name: str) -> Iterator[None]:
-        """Time a named section (wall-clock, GPU-synchronised)."""
-        mx.synchronize()
+        """Time a named section (wall-clock, no GPU sync)."""
         t0 = time.perf_counter()
         yield
-        mx.synchronize()
         elapsed = time.perf_counter() - t0
         self._entries.append(_Entry(name=name, wall_s=elapsed))
 
@@ -71,7 +72,6 @@ class Profiler:
             return "(no sections recorded)"
 
         total = self.total_s
-        # Column widths
         max_name = max(len(e.name) for e in self._entries)
         col_name = max(max_name, 7)  # "section"
 
