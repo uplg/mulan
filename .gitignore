@@ -59,6 +59,8 @@ ckpt-mlx/
 *.flac
 *.ogg
 
+!demo.mp3
+
 # Logs
 *.log
 logs/
