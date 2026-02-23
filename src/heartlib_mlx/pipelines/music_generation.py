@@ -185,7 +185,11 @@ class HeartMuLaGenPipeline:
             starts=starts_arr,
         )
         mx.eval(curr_token)
-        frames.append(curr_token[0:1])
+
+        # Even the very first frame can be EOS (degenerate prompt).
+        first_is_eos = int(curr_token[0, 0].item()) >= self.config.audio_eos_id
+        if not first_is_eos:
+            frames.append(curr_token[0:1])
 
         # Pre-compute the constant mask (text channel inactive).
         _pad_mask = mx.concatenate(
@@ -207,35 +211,45 @@ class HeartMuLaGenPipeline:
 
         max_audio_frames = max_audio_length_ms // 80
 
-        for i in tqdm(range(max_audio_frames), desc="Generating"):
-            if cancel_check is not None and cancel_check():
-                break
+        if not first_is_eos:
+            for i in tqdm(range(max_audio_frames), desc="Generating"):
+                if cancel_check is not None and cancel_check():
+                    break
 
-            curr_token_padded, curr_token_mask = _pad_audio_token(curr_token)
+                curr_token_padded, curr_token_mask = _pad_audio_token(curr_token)
 
-            curr_token = self.mula.generate_frame(
-                tokens=curr_token_padded,
-                tokens_mask=curr_token_mask,
-                input_pos=prompt_pos[:, -1:] + i + 1,
-                temperature=temperature,
-                topk=topk,
-                cfg_scale=cfg_scale,
-                continuous_segments=None,
-                starts=None,
-            )
-            # Clamp EOS/invalid tokens to 0 so the codec receives valid codes.
-            curr_token = mx.where(curr_token >= self.config.audio_eos_id, 0, curr_token)
-            mx.eval(curr_token)
+                curr_token = self.mula.generate_frame(
+                    tokens=curr_token_padded,
+                    tokens_mask=curr_token_mask,
+                    input_pos=prompt_pos[:, -1:] + i + 1,
+                    temperature=temperature,
+                    topk=topk,
+                    cfg_scale=cfg_scale,
+                    continuous_segments=None,
+                    starts=None,
+                )
+                mx.eval(curr_token)
 
-            if progress_callback is not None:
-                progress_callback(i + 1, max_audio_frames)
+                # EOS detection: if the conditional branch (batch 0) emits the EOS
+                # token on codebook 0, the model has decided to stop.  Do NOT
+                # append this frame — the EOS token is not a valid audio code.
+                if int(curr_token[0, 0].item()) >= self.config.audio_eos_id:
+                    break
 
-            frames.append(curr_token[0:1])
+                if progress_callback is not None:
+                    progress_callback(i + 1, max_audio_frames)
 
-        # Stack frames: list of [1, num_codebooks] → [T, num_codebooks]
-        # Then transpose to [num_codebooks, T] to match legacy format
-        stacked = mx.concatenate(frames, axis=0)  # [T, num_codebooks]
-        frames_out = stacked.T  # [num_codebooks, T]
+                frames.append(curr_token[0:1])
+
+        # Stack frames: list of [1, num_codebooks] -> [T, num_codebooks]
+        # Then transpose to [num_codebooks, T] to match legacy format.
+        # If the model emitted EOS immediately, frames may be empty.
+        if not frames:
+            num_codebooks = self._parallel_number - 1  # 8
+            frames_out = mx.zeros((num_codebooks, 0), dtype=mx.int32)
+        else:
+            stacked = mx.concatenate(frames, axis=0)  # [T, num_codebooks]
+            frames_out = stacked.T  # [num_codebooks, T]
 
         return {"frames": frames_out}
 

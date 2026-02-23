@@ -35,8 +35,10 @@ export const streamBus: StreamBus = {
   },
 
   clear() {
+    // Revoke any lingering segment URLs would be caller's job (CreateView
+    // already handles that).  Only reset transport state; do NOT touch
+    // onSegment — the callback is owned by PlayerBar and registered once.
     this.segments = [];
     this.time = 0;
-    this.onSegment = null;
   },
 };
