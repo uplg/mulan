@@ -4,8 +4,10 @@ Use HeartMuLa (3B happy-new-year) on Apple silicon.
 
 [Demo](./demo.mp3)
 
-TODO:
+## TODO:
 - [ ] Streaming output web-ui buggy (skip to next when decoding is in progress)
+
+## Install :
 
 ```
 # download required models/configs
@@ -31,6 +33,8 @@ uv run server.py
 ```
 
 Really sensible to parameters, can take a lot of time if not "known".
+
+## Sources :
 
 - HeartMuLa paper : https://arxiv.org/abs/2601.10547
 - Heartlib repo : https://github.com/HeartMuLa/heartlib
