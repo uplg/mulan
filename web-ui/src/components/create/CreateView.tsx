@@ -20,7 +20,7 @@ export function CreateView() {
   const [lyrics, setLyrics] = useState("");
   const [styles, setStyles] = useState("electronic,ambient,instrumental");
   const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState(30);
+  const [duration, setDuration] = useState(240);
   const [temperature, setTemperature] = useState(1.0);
   const [cfgScale, setCfgScale] = useState(1.5);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -282,7 +282,7 @@ export function CreateView() {
                 value={[duration]}
                 onValueChange={([v]) => setDuration(v)}
                 min={5}
-                max={300}
+                max={450}
                 step={5}
                 className="flex-1"
               />
