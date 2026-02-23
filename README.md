@@ -17,7 +17,7 @@ cp ckpt/gen_config.json ckpt-mlx/gen_config.json
 cp ckpt/tokenizer.json ckpt-mlx/tokenizer.json
 
 # build frontend
-cd web-ui && bun run build
+cd web-ui && bun run build && cd ..
 
 # start server (will serve frontend)
 uv run server.py

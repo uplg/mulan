@@ -18,15 +18,6 @@ from typing import Optional
 import mlx.core as mx
 import mlx.nn as nn
 
-
-# RMSNorm  (MLX ships nn.RMSNorm — we use it directly)
-
-# nn.RMSNorm(dims, eps) — compatible with legacy RMSNorm.
-
-
-# Rotary Embedding
-
-
 def _build_rope_sin_cos(seq_len: int, dim: int, base: float = 10000.0) -> tuple[mx.array, mx.array]:
     """Build sin/cos tables for rotary embedding.
 
@@ -72,10 +63,6 @@ def _apply_rope_interleaved(
     rot = rot.reshape(B, H, T, rope_dim)
 
     return mx.concatenate([rot, tail], axis=-1)
-
-
-# LlamaAttention
-
 
 class LlamaAttention(nn.Module):
     """Multi-head attention with RoPE (interleaved variant).
@@ -155,10 +142,6 @@ class LlamaAttention(nn.Module):
         out = out.transpose(0, 2, 1, 3).reshape(B, T, self.inner_dim)
         return self.o_proj(out)
 
-
-# LlamaMLP
-
-
 class LlamaMLP(nn.Module):
     """SiLU-gated MLP matching legacy Llama style."""
 
@@ -181,8 +164,6 @@ class LlamaMLP(nn.Module):
 
 
 # LlamaTransformerBlock
-
-
 class LlamaTransformerBlock(nn.Module):
     """Transformer block with optional PixArt-style AdaLayerNorm single."""
 
@@ -267,10 +248,6 @@ class LlamaTransformerBlock(nn.Module):
             x = x + h
             return x
 
-
-# ProjectLayer
-
-
 class ProjectLayer(nn.Module):
     """Conv1d(kernel=k) → scale → Linear.
 
@@ -294,10 +271,6 @@ class ProjectLayer(nn.Module):
         x = x * (self.kernel_size**-0.5)
         x = self.ffn_2(x)
         return x
-
-
-# Timestep embeddings  (PixArt-style)
-
 
 class TimestepEmbedding(nn.Module):
     """Linear → SiLU → Linear."""
@@ -359,10 +332,6 @@ class AdaLayerNormSingleFlow(nn.Module):
     ) -> tuple[mx.array, mx.array]:
         embedded_timestep = self.emb(timestep, hidden_dtype=hidden_dtype)
         return self.linear(nn.silu(embedded_timestep)), embedded_timestep
-
-
-# LlamaTransformer  (two-stage DiT)
-
 
 class LlamaTransformer(nn.Module):
     """Two-stage DiT transformer for flow-matching denoiser.

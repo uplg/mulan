@@ -11,16 +11,11 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
-from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
 
 from .configuration_heartmula import FLAVORS, HeartMuLaConfig, LlamaFlavorSpec
-
-
-# RoPE  (matches torchtune Llama3ScaledRoPE exactly)
-
 
 def _apply_scaling(
     freqs: mx.array,
@@ -90,10 +85,6 @@ def _apply_rope(x: mx.array, cache: mx.array) -> mx.array:
     out = mx.stack([out0, out1], axis=-1)  # [B, S, H, D//2, 2]
     return out.reshape(*shape, D).astype(input_dtype)
 
-
-# KV-Cache  (plain dataclass — NOT an nn.Module, so not in parameter tree)
-
-
 @dataclass
 class KVCache:
     """Simple KV-cache that mirrors torchtune's KVCache behaviour.
@@ -135,12 +126,8 @@ class KVCache:
         # Avoids allocating new mx.zeros_like tensors (7x per frame in decoder).
         self.pos = 0
 
-
-# Multi-Head Attention  (with GQA + RoPE + KV-cache)
-
-
 class MultiHeadAttention(nn.Module):
-    """Multi-head attention with grouped-query support, matching torchtune exactly."""
+    """Multi-head attention with grouped-query support"""
 
     def __init__(
         self,
@@ -262,10 +249,6 @@ class MultiHeadAttention(nn.Module):
             proj = proj.astype(x.dtype)
         return proj
 
-
-# Feed-forward  (SwiGLU)
-
-
 class FeedForward(nn.Module):
     """SwiGLU feed-forward matching torchtune's ``FeedForward``."""
 
@@ -277,10 +260,6 @@ class FeedForward(nn.Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         return self.w2(nn.silu(self.w1(x)) * self.w3(x))
-
-
-# Transformer layer
-
 
 class TransformerSelfAttentionLayer(nn.Module):
     """Pre-norm transformer layer matching torchtune's layout."""
@@ -312,10 +291,6 @@ class TransformerSelfAttentionLayer(nn.Module):
         h = self.attn(h, h, mask=mask, input_pos=input_pos, rope_cache=rope_cache) + x
         out = self.mlp(self.mlp_norm(h)) + h
         return out
-
-
-# Transformer Decoder  (mirrors torchtune TransformerDecoder)
-
 
 class TransformerDecoder(nn.Module):
     """Stack of transformer layers with norm + output projection.
@@ -396,10 +371,6 @@ class TransformerDecoder(nn.Module):
         # Critical for decoder path — bfloat16 matmul corrupts codebook 1-7 logits.
         return h.astype(mx.float32)
 
-
-# Sampling helpers
-
-
 def _sample_topk(logits: mx.array, topk: int, temperature: float) -> mx.array:
     """Top-k sampling matching the legacy ``sample_topk`` exactly.
 
@@ -426,9 +397,6 @@ def _sample_topk(logits: mx.array, topk: int, temperature: float) -> mx.array:
     return mx.argmax(probs / q, axis=-1, keepdims=True).astype(mx.int32)
 
 
-# Causal mask helpers
-
-
 def _create_causal_mask(seq_len: int) -> mx.array:
     """Lower-triangular boolean mask ``[seq_len, seq_len]``."""
     return mx.tril(mx.ones((seq_len, seq_len), dtype=mx.bool_), k=0)
@@ -442,10 +410,6 @@ def _index_causal_mask(mask: mx.array, input_pos: mx.array) -> mx.array:
     """
     rows = mask[input_pos]  # [B, S, full_seq_len]
     return rows
-
-
-# HeartMuLa
-
 
 class HeartMuLa(nn.Module):
     """HeartMuLa music generation model — MLX port."""
@@ -688,8 +652,6 @@ class HeartMuLa(nn.Module):
         mx.eval(model.parameters())
         return model
 
-
-# Utility: scatter for indexed assignment  h[batch_idx, pos] = val
 def _scatter_1d(
     h: mx.array,
     batch_indices: mx.array,

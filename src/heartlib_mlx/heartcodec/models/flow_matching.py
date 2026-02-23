@@ -13,10 +13,6 @@ import mlx.nn as nn
 
 from .transformer import LlamaTransformer
 
-
-# ResidualVQ  (inference-only)
-
-
 class ResidualVQInference(nn.Module):
     """Minimal ResidualVQ that only supports ``get_output_from_indices``.
 
@@ -107,10 +103,6 @@ class _Codebook(nn.Module):
         self.cluster_size = mx.zeros((1, codebook_size))
         self.embed_avg = mx.zeros((1, codebook_size, codebook_dim))
         self.initted = mx.zeros((1,))
-
-
-# FlowMatching
-
 
 class FlowMatching(nn.Module):
     """Flow-matching denoiser with RVQ code conditioning.

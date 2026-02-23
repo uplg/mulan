@@ -410,10 +410,6 @@ def _generate_music_sync(
     language: str = "",
 ) -> tuple[str, int, float, float]:
     """Synchronous music generation using the pipeline."""
-    from heartlib_mlx.profiler import Profiler
-
-    prof = Profiler()
-
     gen_state.cancelled = False
     gen_state.progress = 0.05
     gen_state.message = "Preparing..."

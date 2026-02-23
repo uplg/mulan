@@ -22,10 +22,6 @@ from tqdm import tqdm
 from ..heartcodec.modeling_heartcodec import HeartCodec
 from ..heartmula.modeling_heartmula import HeartMuLa
 
-
-# Config
-
-
 @dataclass
 class HeartMuLaGenConfig:
     """Generation-time config (token IDs, etc.)."""

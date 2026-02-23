@@ -30,8 +30,6 @@ class HeartMuLaConfig:
         filtered = {k: v for k, v in data.items() if k in valid_keys}
         return cls(**filtered)
 
-
-# Flavor specifications
 @dataclass(frozen=True)
 class LlamaFlavorSpec:
     """Immutable spec for a Llama-family transformer variant."""

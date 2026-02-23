@@ -515,30 +515,14 @@ class ScalarModel(nn.Module):
                 x = mx.tanh(layer(x))
         return x
 
-    def decode(self, x: mx.array, _profile: bool = False) -> mx.array:
+    def decode(self, x: mx.array) -> mx.array:
         """Decode latent to waveform. x: (N, L, C).
 
         Applies round_func9 (scalar VQ) then runs the decoder stack.
         """
-        import time
-
-        if _profile:
-            t0 = time.perf_counter()
         x = round_func9(x)
-        if _profile:
-            t1 = time.perf_counter()
-            print(f"  round_func9: {(t1 - t0) * 1000:.2f}ms")
-            t0 = t1
-
-        for i, layer in enumerate(self.decoder):
-            if _profile:
-                t_layer_start = time.perf_counter()
+        for layer in self.decoder:
             x = layer(x)
-            if _profile:
-                t_layer_end = time.perf_counter()
-                print(
-                    f"  decoder_layer_{i} ({type(layer).__name__}): {(t_layer_end - t_layer_start) * 1000:.2f}ms"
-                )
         return x
 
     def __call__(self, x: mx.array) -> mx.array:
