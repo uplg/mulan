@@ -59,6 +59,8 @@ if _src_path.exists():
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 logger = logging.getLogger("heartmula")
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 # ---------------------------------------------------------------------------
 # Pydantic models
