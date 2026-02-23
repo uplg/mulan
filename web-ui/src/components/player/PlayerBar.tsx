@@ -47,6 +47,17 @@ export function PlayerBar() {
     }
   }, [state.isPlaying]);
 
+  const handleNext = useCallback(() => {
+    const idx = state.songs.findIndex(
+      (s) => s.filename === state.currentTrack?.filename
+    );
+    if (idx < state.songs.length - 1) {
+      dispatch({ type: "PLAY_TRACK", track: state.songs[idx + 1] });
+    } else if (repeatMode === "all" && state.songs.length > 0) {
+      dispatch({ type: "PLAY_TRACK", track: state.songs[0] });
+    }
+  }, [state.songs, state.currentTrack, repeatMode, dispatch]);
+
   // Audio events
   useEffect(() => {
     const audio = audioRef.current;
@@ -72,7 +83,7 @@ export function PlayerBar() {
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
       audio.removeEventListener("ended", onEnded);
     };
-  }, [repeatMode]);
+  }, [repeatMode, handleNext]);
 
   const togglePlay = () => {
     dispatch({ type: "SET_PLAYING", isPlaying: !state.isPlaying });
@@ -118,16 +129,6 @@ export function PlayerBar() {
     }
   }, [state.songs, state.currentTrack, dispatch]);
 
-  const handleNext = useCallback(() => {
-    const idx = state.songs.findIndex(
-      (s) => s.filename === state.currentTrack?.filename
-    );
-    if (idx < state.songs.length - 1) {
-      dispatch({ type: "PLAY_TRACK", track: state.songs[idx + 1] });
-    } else if (repeatMode === "all" && state.songs.length > 0) {
-      dispatch({ type: "PLAY_TRACK", track: state.songs[0] });
-    }
-  }, [state.songs, state.currentTrack, repeatMode, dispatch]);
 
   const handleDownload = () => {
     if (!state.currentTrack) return;
@@ -145,9 +146,8 @@ export function PlayerBar() {
   return (
     <>
       <audio ref={audioRef} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex h-[90px] items-center gap-4 border-t border-white/5 bg-gradient-to-b from-[#181818] to-[#121212] px-4">
-        {/* Left: Track info */}
-        <div className="flex w-[220px] min-w-[220px] items-center gap-3.5">
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex h-22.5 items-center gap-4 border-t border-white/5 bg-linear-to-b from-[#181818] to-[#121212] px-4">
+        <div className="flex w-55 min-w-55 items-center gap-3.5">
           <div
             className="h-14 w-14 shrink-0 rounded shadow-lg"
             style={getAlbumArtStyle(state.currentTrack)}
@@ -160,8 +160,7 @@ export function PlayerBar() {
           </div>
         </div>
 
-        {/* Center: Controls + progress */}
-        <div className="mx-auto flex max-w-[720px] flex-1 flex-col items-center gap-2">
+        <div className="mx-auto flex max-w-180 flex-1 flex-col items-center gap-2">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -207,7 +206,7 @@ export function PlayerBar() {
           </div>
 
           <div className="flex w-full items-center gap-2.5">
-            <span className="min-w-[40px] text-right text-[11px] tabular-nums text-muted-foreground">
+            <span className="min-w-10 text-right text-[11px] tabular-nums text-muted-foreground">
               {formatDuration(currentTime)}
             </span>
             <Slider
@@ -217,14 +216,14 @@ export function PlayerBar() {
               step={0.1}
               className="flex-1"
             />
-            <span className="min-w-[40px] text-[11px] tabular-nums text-muted-foreground">
+            <span className="min-w-10 text-[11px] tabular-nums text-muted-foreground">
               {formatDuration(totalDuration)}
             </span>
           </div>
         </div>
 
         {/* Right: Actions + volume */}
-        <div className="flex w-[220px] min-w-[220px] items-center justify-end gap-1">
+        <div className="flex w-55 min-w-55 items-center justify-end gap-1">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleDownload}>
             <Download className="h-4 w-4" />
           </Button>

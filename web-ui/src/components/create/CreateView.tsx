@@ -37,7 +37,6 @@ export function CreateView() {
     }
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopPolling();
@@ -159,7 +158,6 @@ export function CreateView() {
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Lyrics Section */}
       <section>
         <button
           className="flex w-full items-center gap-2 py-3"
@@ -196,7 +194,6 @@ export function CreateView() {
         )}
       </section>
 
-      {/* Styles Section */}
       <section>
         <button
           className="flex w-full items-center gap-2 py-3"
@@ -234,7 +231,6 @@ export function CreateView() {
         )}
       </section>
 
-      {/* Advanced Options */}
       <section>
         <button
           className="flex w-full items-center gap-2 py-3"
@@ -250,9 +246,8 @@ export function CreateView() {
         </button>
         {advancedOpen && (
           <div className="flex flex-col gap-2.5">
-            {/* Temperature */}
             <div className="flex items-center gap-3 rounded-[10px] border border-border bg-input px-4 py-3">
-              <span className="min-w-[120px] text-[13px]">Weirdness</span>
+              <span className="min-w-30 text-[13px]">Weirdness</span>
               <Slider
                 value={[temperature]}
                 onValueChange={([v]) => setTemperature(v)}
@@ -261,14 +256,13 @@ export function CreateView() {
                 step={0.1}
                 className="flex-1"
               />
-              <span className="min-w-[40px] text-right text-[13px] text-muted-foreground">
+              <span className="min-w-10 text-right text-[13px] text-muted-foreground">
                 {temperature.toFixed(1)}
               </span>
             </div>
 
-            {/* CFG Scale */}
             <div className="flex items-center gap-3 rounded-[10px] border border-border bg-input px-4 py-3">
-              <span className="min-w-[120px] text-[13px]">Style Influence</span>
+              <span className="min-w-30 text-[13px]">Style Influence</span>
               <Slider
                 value={[cfgScale]}
                 onValueChange={([v]) => setCfgScale(v)}
@@ -277,14 +271,13 @@ export function CreateView() {
                 step={0.1}
                 className="flex-1"
               />
-              <span className="min-w-[40px] text-right text-[13px] text-muted-foreground">
+              <span className="min-w-10 text-right text-[13px] text-muted-foreground">
                 {cfgScale.toFixed(1)}
               </span>
             </div>
 
-            {/* Duration */}
             <div className="flex items-center gap-3 rounded-[10px] border border-border bg-input px-4 py-3">
-              <span className="min-w-[120px] text-[13px]">Duration (seconds)</span>
+              <span className="min-w-30 text-[13px]">Duration (seconds)</span>
               <Slider
                 value={[duration]}
                 onValueChange={([v]) => setDuration(v)}
@@ -293,14 +286,14 @@ export function CreateView() {
                 step={5}
                 className="flex-1"
               />
-              <span className="min-w-[40px] text-right text-[13px] text-muted-foreground">
+              <span className="min-w-10 text-right text-[13px] text-muted-foreground">
                 {duration}s
               </span>
             </div>
 
             {/* Song Title */}
             <div className="flex items-center gap-3 rounded-[10px] border border-border bg-input px-4 py-3">
-              <Music className="h-[18px] w-[18px] text-muted-foreground" />
+              <Music className="h-4.5 w-4.5 text-muted-foreground" />
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -312,7 +305,6 @@ export function CreateView() {
         )}
       </section>
 
-      {/* Create Button */}
       <Button
         variant="outline"
         className="mt-6 w-full gap-2 py-6 text-[15px] font-medium"
@@ -332,7 +324,6 @@ export function CreateView() {
         )}
       </Button>
 
-      {/* Progress */}
       {state.isGenerating && (
         <div className="mt-4">
           <Progress value={state.progress * 100} className="h-1" />

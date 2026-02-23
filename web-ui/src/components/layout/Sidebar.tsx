@@ -23,7 +23,7 @@ export function Sidebar() {
   const { state, dispatch } = useApp();
 
   return (
-    <aside className="flex w-[180px] min-w-[180px] flex-col border-r border-border bg-sidebar p-4">
+    <aside className="flex w-45 min-w-45 flex-col border-r border-border bg-sidebar p-4">
       <div className="px-3 pb-6 text-[26px] font-extrabold tracking-tight text-foreground">
         MuLa(n)
       </div>

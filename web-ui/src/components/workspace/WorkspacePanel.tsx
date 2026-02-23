@@ -37,14 +37,12 @@ export function WorkspacePanel() {
   };
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col bg-background p-5">
-      {/* Header */}
+    <aside className="flex w-90 shrink-0 flex-col bg-background p-5">
       <div className="mb-5 flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Workspaces</span>
         <span className="text-sm text-muted-foreground">&rsaquo; My Workspace</span>
       </div>
 
-      {/* Toolbar */}
       <div className="mb-5 flex gap-3">
         <div className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-input px-3 py-2">
           <Search className="h-4 w-4 text-muted-foreground" />
@@ -70,7 +68,6 @@ export function WorkspacePanel() {
         </Button>
       </div>
 
-      {/* Song list */}
       <ScrollArea className="flex-1">
         {displaySongs.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">

@@ -10,14 +10,12 @@ import { PlayerBar } from "@/components/player/PlayerBar";
 function AppContent() {
   const { state, dispatch } = useApp();
 
-  // Load songs on mount
   useEffect(() => {
     api.getSongs().then((data) => {
       dispatch({ type: "SET_SONGS", songs: data.songs });
     }).catch(console.error);
   }, [dispatch]);
 
-  // Check if generation is already in progress on mount
   useEffect(() => {
     api.getProgress().then((status) => {
       if (status.is_generating) {
@@ -32,7 +30,6 @@ function AppContent() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
 
-        {/* Main content area */}
         <main className="flex-1 overflow-y-auto border-r border-border px-8 py-6">
           {state.view === "create" && <CreateView />}
           {state.view === "home" && (
@@ -67,15 +64,12 @@ function AppContent() {
           )}
         </main>
 
-        {/* Workspace panel (visible on create view) */}
         {state.view === "create" && <WorkspacePanel />}
       </div>
 
-      {/* Player bar */}
       <PlayerBar />
 
-      {/* Add bottom padding when player is visible */}
-      {state.currentTrack && <div className="h-[90px] shrink-0" />}
+      {state.currentTrack && <div className="h-22.5 shrink-0" />}
     </div>
   );
 }
