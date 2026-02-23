@@ -1,22 +1,12 @@
 import {
   Plus,
-  Home,
-  FolderOpen,
-  Music,
-  Search,
-  Settings,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
 import type { AppState } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const navItems: { icon: React.ElementType; label: string; view: AppState["view"] }[] = [
-  { icon: Plus, label: "Create", view: "create" },
-  { icon: Home, label: "Home", view: "home" },
-  { icon: FolderOpen, label: "Studio", view: "studio" },
-  { icon: Music, label: "Library", view: "library" },
-  { icon: Search, label: "Search", view: "search" },
-  { icon: Settings, label: "Settings", view: "settings" },
+  { icon: Plus, label: "Create", view: "create" }
 ];
 
 export function Sidebar() {
