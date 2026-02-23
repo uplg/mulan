@@ -1,6 +1,7 @@
 The goal of this project is to create a "state of the art" frontend to use the HeartMuLa MLX model.
 
-GOAL : Optimize sound generation time, it works flawlessly but is very slow after generating. Probably a decode or something like that that takes a lot of time.
+TODO:
+Stream MP3 while decode ? (Suno like)
 
 You need to split in correct minimal steps.
 

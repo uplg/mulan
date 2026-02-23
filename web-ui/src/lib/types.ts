@@ -56,3 +56,21 @@ export interface StatusResponse {
   model_loaded: boolean;
   is_generating: boolean;
 }
+
+// SSE streaming event types
+
+export interface StreamProgressEvent {
+  progress: number;
+  message: string;
+}
+
+export interface StreamCompleteEvent {
+  filename: string;
+  frames: number;
+  duration: number;
+  time: number;
+}
+
+export interface StreamCancelledEvent {
+  message: string;
+}

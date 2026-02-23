@@ -1,4 +1,4 @@
 from .configuration_heartcodec import HeartCodecConfig
-from .modeling_heartcodec import HeartCodec
+from .modeling_heartcodec import AudioSegment, HeartCodec
 
-__all__ = ["HeartCodecConfig", "HeartCodec"]
+__all__ = ["AudioSegment", "HeartCodecConfig", "HeartCodec"]

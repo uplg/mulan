@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,8 +20,9 @@ import soundfile as sf
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from ..heartcodec.modeling_heartcodec import HeartCodec
+from ..heartcodec.modeling_heartcodec import AudioSegment, HeartCodec
 from ..heartmula.modeling_heartmula import HeartMuLa
+
 
 @dataclass
 class HeartMuLaGenConfig:
@@ -171,7 +173,7 @@ class HeartMuLaGenPipeline:
         bs_size = 2 if cfg_scale != 1.0 else 1
         self.mula.setup_caches(bs_size)
 
-        # First frame: encode full prompt
+        # First frame: encode full prompt.
         curr_token = self.mula.generate_frame(
             tokens=prompt_tokens,
             tokens_mask=prompt_tokens_mask,
@@ -221,14 +223,13 @@ class HeartMuLaGenPipeline:
                 continuous_segments=None,
                 starts=None,
             )
+            # Clamp EOS/invalid tokens to 0 so the codec receives valid codes.
+            curr_token = mx.where(curr_token >= self.config.audio_eos_id, 0, curr_token)
             mx.eval(curr_token)
 
             if progress_callback is not None:
                 progress_callback(i + 1, max_audio_frames)
 
-            # Check EOS
-            if mx.any(curr_token[0:1, :] >= self.config.audio_eos_id).item():
-                break
             frames.append(curr_token[0:1])
 
         # Stack frames: list of [1, num_codebooks] → [T, num_codebooks]
@@ -244,8 +245,67 @@ class HeartMuLaGenPipeline:
         # wav: [num_bands, num_samples] → [num_samples, num_bands]
         wav = wav.T.astype(mx.float32)
         mx.eval(wav)
-        # soundfile consumes mx.array directly via the Python buffer protocol (zero-copy).
-        sf.write(save_path, wav, 48000, subtype="PCM_16")
+
+        # Trim trailing silence using pure MLX.
+        # Compute mono envelope: mean of absolute values across channels.
+        mono = mx.mean(mx.abs(wav), axis=1) if wav.ndim == 2 else mx.abs(wav)  # [num_samples]
+
+        sample_rate = 48000
+        window = sample_rate  # 1-second window
+        padding = sample_rate // 2  # 0.5s padding after last active audio
+        threshold = 0.005
+        num_samples = mono.shape[0]
+
+        # Reshape into non-overlapping chunks and take the max per chunk.
+        # Truncate to a multiple of window size, then handle the remainder.
+        n_full_chunks = num_samples // window
+        if n_full_chunks > 0:
+            chunked = mono[: n_full_chunks * window].reshape(n_full_chunks, window)
+            chunk_max = mx.max(chunked, axis=1)  # [n_full_chunks]
+            mx.eval(chunk_max)
+
+            # Find the last chunk above threshold.
+            active_mask = chunk_max > threshold  # [n_full_chunks]
+            # Multiply by chunk indices; take argmax of masked values.
+            indices = mx.arange(n_full_chunks, dtype=mx.int32)
+            # If no chunk is active, last_active_chunk = -1
+            active_indices = mx.where(active_mask, indices, mx.array(-1, dtype=mx.int32))
+            mx.eval(active_indices)
+            last_active_chunk = int(mx.max(active_indices).item())
+        else:
+            last_active_chunk = -1
+
+        # Check remainder (tail shorter than one window).
+        remainder_start = n_full_chunks * window
+        if remainder_start < num_samples:
+            tail_max = mx.max(mono[remainder_start:])
+            mx.eval(tail_max)
+            if float(tail_max.item()) > threshold:
+                # Tail is active — keep everything.
+                last_active = num_samples
+            elif last_active_chunk >= 0:
+                last_active = min(num_samples, (last_active_chunk + 1) * window + padding)
+            else:
+                last_active = num_samples  # all silence — keep everything
+        elif last_active_chunk >= 0:
+            last_active = min(num_samples, (last_active_chunk + 1) * window + padding)
+        else:
+            last_active = num_samples  # all silence — keep everything
+
+        wav_trimmed = wav[:last_active]
+        mx.eval(wav_trimmed)
+
+        # soundfile consumes array-like via __array__ protocol (zero-copy from MLX).
+        sf.write(save_path, wav_trimmed, 48000, subtype="PCM_16")
+
+    def postprocess_streaming(self, model_outputs: dict[str, Any]) -> Iterator[AudioSegment]:
+        """Decode frames via the codec, yielding audio as each segment completes.
+
+        Callers receive ``AudioSegment`` objects whose ``.audio`` field contains
+        the *new* samples (``[num_bands, num_new_samples]``, float32).
+        """
+        frames: mx.array = model_outputs["frames"]
+        yield from self.codec.detokenize_streaming(frames)
 
     def __call__(self, inputs: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
         preprocess_kwargs, forward_kwargs, postprocess_kwargs = self._sanitize_parameters(**kwargs)

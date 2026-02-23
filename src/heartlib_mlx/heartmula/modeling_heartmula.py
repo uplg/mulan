@@ -17,6 +17,7 @@ import mlx.nn as nn
 
 from .configuration_heartmula import FLAVORS, HeartMuLaConfig, LlamaFlavorSpec
 
+
 def _apply_scaling(
     freqs: mx.array,
     scale_factor: int,
@@ -85,6 +86,7 @@ def _apply_rope(x: mx.array, cache: mx.array) -> mx.array:
     out = mx.stack([out0, out1], axis=-1)  # [B, S, H, D//2, 2]
     return out.reshape(*shape, D).astype(input_dtype)
 
+
 @dataclass
 class KVCache:
     """Simple KV-cache that mirrors torchtune's KVCache behaviour.
@@ -113,18 +115,19 @@ class KVCache:
         )
 
     def update(self, k: mx.array, v: mx.array) -> tuple[mx.array, mx.array]:
-        """Write *k*, *v* of shape ``[B, H, S, D]`` and return full cache."""
+        """Write *k*, *v* of shape ``[B, H, S, D]`` and return only filled positions."""
         seq_len = k.shape[2]
         self.k_cache[:, :, self.pos : self.pos + seq_len, :] = k
         self.v_cache[:, :, self.pos : self.pos + seq_len, :] = v
         self.pos += seq_len
-        return self.k_cache, self.v_cache
+        return self.k_cache[:, :, : self.pos, :], self.v_cache[:, :, : self.pos, :]
 
     def reset(self) -> None:
         # Just reset position — old data beyond pos is never read by attention
         # (attention only reads up to self.pos), and gets overwritten by update().
         # Avoids allocating new mx.zeros_like tensors (7x per frame in decoder).
         self.pos = 0
+
 
 class MultiHeadAttention(nn.Module):
     """Multi-head attention with grouped-query support"""
@@ -192,8 +195,8 @@ class MultiHeadAttention(nn.Module):
         if y is None:
             # Streaming mode: k/v come entirely from cache
             assert self._kv_cache is not None
-            k = self._kv_cache.k_cache
-            v = self._kv_cache.v_cache
+            k = self._kv_cache.k_cache[:, :, : self._kv_cache.pos, :]
+            v = self._kv_cache.v_cache[:, :, : self._kv_cache.pos, :]
         else:
             S_y = y.shape[1]
             k = self.k_proj(y).reshape(B, S_y, self.num_kv_heads, self.head_dim)
@@ -228,10 +231,13 @@ class MultiHeadAttention(nn.Module):
                 k, v = self._kv_cache.update(k, v)
 
         # Scaled dot-product attention.
+        S_kv = k.shape[2]
         scores = (q @ k.transpose(0, 1, 3, 2)) / self._scale  # [B, H, S_x, S_kv]
 
         if mask is not None:
-            # mask: [B, S_x, S_kv] bool — True means attend
+            # mask: [B, S_x, S_kv_full] bool — True means attend
+            # Slice to match actual cache length when KV-cache is active.
+            mask = mask[:, :, :S_kv]
             # expand for heads: [B, 1, S_x, S_kv]
             mask_4d = mask[:, None, :, :]
             large_neg = mx.array(-1e9, dtype=scores.dtype)
@@ -249,6 +255,7 @@ class MultiHeadAttention(nn.Module):
             proj = proj.astype(x.dtype)
         return proj
 
+
 class FeedForward(nn.Module):
     """SwiGLU feed-forward matching torchtune's ``FeedForward``."""
 
@@ -260,6 +267,7 @@ class FeedForward(nn.Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         return self.w2(nn.silu(self.w1(x)) * self.w3(x))
+
 
 class TransformerSelfAttentionLayer(nn.Module):
     """Pre-norm transformer layer matching torchtune's layout."""
@@ -291,6 +299,7 @@ class TransformerSelfAttentionLayer(nn.Module):
         h = self.attn(h, h, mask=mask, input_pos=input_pos, rope_cache=rope_cache) + x
         out = self.mlp(self.mlp_norm(h)) + h
         return out
+
 
 class TransformerDecoder(nn.Module):
     """Stack of transformer layers with norm + output projection.
@@ -371,6 +380,7 @@ class TransformerDecoder(nn.Module):
         # Critical for decoder path — bfloat16 matmul corrupts codebook 1-7 logits.
         return h.astype(mx.float32)
 
+
 def _sample_topk(logits: mx.array, topk: int, temperature: float) -> mx.array:
     """Top-k sampling matching the legacy ``sample_topk`` exactly.
 
@@ -410,6 +420,7 @@ def _index_causal_mask(mask: mx.array, input_pos: mx.array) -> mx.array:
     """
     rows = mask[input_pos]  # [B, S, full_seq_len]
     return rows
+
 
 class HeartMuLa(nn.Module):
     """HeartMuLa music generation model — MLX port."""
@@ -651,6 +662,7 @@ class HeartMuLa(nn.Module):
         model._dtype = dtype
         mx.eval(model.parameters())
         return model
+
 
 def _scatter_1d(
     h: mx.array,

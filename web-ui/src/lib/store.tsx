@@ -10,6 +10,8 @@ export interface AppState {
   currentTrack: SongInfo | null;
   isPlaying: boolean;
   view: "create" | "home" | "library" | "search" | "studio" | "settings";
+  /** Blob URLs of decoded audio segments arriving during streaming */
+  streamingSegments: string[];
 }
 
 const initialState: AppState = {
@@ -20,6 +22,7 @@ const initialState: AppState = {
   currentTrack: null,
   isPlaying: false,
   view: "create",
+  streamingSegments: [],
 };
 
 // ----- Actions -----
@@ -29,7 +32,9 @@ type Action =
   | { type: "SET_PROGRESS"; progress: number; message: string }
   | { type: "PLAY_TRACK"; track: SongInfo }
   | { type: "SET_PLAYING"; isPlaying: boolean }
-  | { type: "SET_VIEW"; view: AppState["view"] };
+  | { type: "SET_VIEW"; view: AppState["view"] }
+  | { type: "PUSH_STREAMING_SEGMENT"; url: string }
+  | { type: "CLEAR_STREAMING_SEGMENTS" };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -40,11 +45,15 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_PROGRESS":
       return { ...state, progress: action.progress, progressMessage: action.message };
     case "PLAY_TRACK":
-      return { ...state, currentTrack: action.track, isPlaying: true };
+      return { ...state, currentTrack: action.track, isPlaying: true, streamingSegments: [] };
     case "SET_PLAYING":
       return { ...state, isPlaying: action.isPlaying };
     case "SET_VIEW":
       return { ...state, view: action.view };
+    case "PUSH_STREAMING_SEGMENT":
+      return { ...state, streamingSegments: [...state.streamingSegments, action.url] };
+    case "CLEAR_STREAMING_SEGMENTS":
+      return { ...state, streamingSegments: [] };
     default:
       return state;
   }

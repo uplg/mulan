@@ -7,12 +7,46 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useApp } from "@/lib/store";
-import { api } from "@/lib/api";
+import { api, type AudioChunkInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const STYLE_TAGS = [
   "pop", "rock", "jazz", "piano", "acoustic", "electronic", "female vocal", "male vocal",
 ];
+
+type ConfigPreset = "beginner" | "balanced" | "experimental";
+
+interface AdvancedConfig {
+  name: string;
+  temperature: number;
+  cfgScale: number;
+  topk: number;
+  description: string;
+}
+
+const CONFIG_PRESETS: Record<ConfigPreset, AdvancedConfig> = {
+  beginner: {
+    name: "Beginner",
+    temperature: 1.0,
+    cfgScale: 1.5,
+    topk: 50,
+    description: "Safe defaults for consistent results",
+  },
+  balanced: {
+    name: "Balanced",
+    temperature: 0.8,
+    cfgScale: 1.5,
+    topk: 30,
+    description: "Focused generation with good coherence",
+  },
+  experimental: {
+    name: "Experimental",
+    temperature: 1.3,
+    cfgScale: 2.5,
+    topk: 80,
+    description: "Diverse ideas with strict style adherence",
+  },
+};
 
 export function CreateView() {
   const { state, dispatch } = useApp();
@@ -23,12 +57,16 @@ export function CreateView() {
   const [duration, setDuration] = useState(240);
   const [temperature, setTemperature] = useState(1.0);
   const [cfgScale, setCfgScale] = useState(1.5);
+  const [topk, setTopk] = useState(50);
+  const [activeConfig, setActiveConfig] = useState<ConfigPreset>("beginner");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(true);
   const [stylesOpen, setStylesOpen] = useState(true);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const generateAbortRef = useRef<AbortController | null>(null);
+  /** Blob URLs created during streaming (revoked on cleanup) */
+  const segmentUrlsRef = useRef<string[]>([]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -41,6 +79,8 @@ export function CreateView() {
     return () => {
       stopPolling();
       generateAbortRef.current?.abort();
+      for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
+      segmentUrlsRef.current = [];
     };
   }, [stopPolling]);
 
@@ -49,6 +89,14 @@ export function CreateView() {
     if (!current.includes(tag)) {
       setStyles([...current, tag].join(","));
     }
+  };
+
+  const applyConfig = (preset: ConfigPreset) => {
+    const config = CONFIG_PRESETS[preset];
+    setActiveConfig(preset);
+    setTemperature(config.temperature);
+    setCfgScale(config.cfgScale);
+    setTopk(config.topk);
   };
 
   const surpriseMe = useCallback(async () => {
@@ -74,10 +122,6 @@ export function CreateView() {
         });
         if (!status.is_generating) {
           stopPolling();
-          dispatch({ type: "SET_GENERATING", isGenerating: false });
-          // Reload songs
-          const data = await api.getSongs();
-          dispatch({ type: "SET_SONGS", songs: data.songs });
         }
       } catch {
         // Ignore transient polling errors
@@ -91,48 +135,98 @@ export function CreateView() {
     dispatch({ type: "SET_GENERATING", isGenerating: true });
     dispatch({ type: "SET_PROGRESS", progress: 0, message: "Starting..." });
 
-    // Create a dedicated AbortController for the generate fetch
+    // Reset streaming state
+    for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
+    segmentUrlsRef.current = [];
+    dispatch({ type: "CLEAR_STREAMING_SEGMENTS" });
+
     const controller = new AbortController();
     generateAbortRef.current = controller;
 
+    // Poll progress during token generation phase
     startProgressPolling();
 
     try {
-      const result = await api.generate(
+      await api.generateStream(
         {
           lyrics,
           styles,
           duration,
           cfg_scale: cfgScale,
           temperature,
-          topk: 50,
+          topk,
           title: title || `Generation ${state.songs.length + 1}`,
           language: "",
         },
+        {
+          onProgress: (evt) => {
+            dispatch({
+              type: "SET_PROGRESS",
+              progress: evt.progress,
+              message: evt.message,
+            });
+          },
+          onAudio: (chunk: AudioChunkInfo) => {
+            const mimeType = chunk.format === "mp3" ? "audio/mpeg" : "audio/wav";
+            const blob = new Blob([chunk.bytes as BlobPart], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            segmentUrlsRef.current.push(url);
+            dispatch({ type: "PUSH_STREAMING_SEGMENT", url });
+
+            // Auto-play on first chunk
+            if (chunk.segment === 0) {
+              dispatch({ type: "SET_PLAYING", isPlaying: true });
+            }
+
+            dispatch({
+              type: "SET_PROGRESS",
+              progress: 0.85 + 0.10 * (chunk.segment + 1) / chunk.totalSegments,
+              message: `Decoding segment ${chunk.segment + 1}/${chunk.totalSegments}...`,
+            });
+          },
+          onComplete: async (evt) => {
+            stopPolling();
+            dispatch({ type: "SET_GENERATING", isGenerating: false });
+            dispatch({ type: "SET_PROGRESS", progress: 1, message: "Complete!" });
+
+            // Clean up streaming segment URLs
+            for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
+            segmentUrlsRef.current = [];
+            dispatch({ type: "CLEAR_STREAMING_SEGMENTS" });
+
+            // Reload songs and play the final file
+            const data = await api.getSongs();
+            dispatch({ type: "SET_SONGS", songs: data.songs });
+            const newSong = data.songs.find((s) => s.filename === evt.filename);
+            if (newSong) {
+              dispatch({ type: "PLAY_TRACK", track: newSong });
+            }
+          },
+          onCancelled: () => {
+            stopPolling();
+            dispatch({ type: "SET_GENERATING", isGenerating: false });
+            dispatch({ type: "SET_PROGRESS", progress: 0, message: "Cancelled" });
+            for (const url of segmentUrlsRef.current) URL.revokeObjectURL(url);
+            segmentUrlsRef.current = [];
+            dispatch({ type: "CLEAR_STREAMING_SEGMENTS" });
+          },
+          onError: (error) => {
+            console.error("Stream error:", error);
+            stopPolling();
+            dispatch({ type: "SET_GENERATING", isGenerating: false });
+            dispatch({
+              type: "SET_PROGRESS",
+              progress: 0,
+              message: `Error: ${error.message}`,
+            });
+          },
+        },
         controller.signal,
       );
-
-      // Generate completed successfully — stop polling, update state
-      stopPolling();
-      dispatch({ type: "SET_GENERATING", isGenerating: false });
-      dispatch({ type: "SET_PROGRESS", progress: 1, message: "Complete!" });
-
-      // Reload songs and auto-play the new track
-      const data = await api.getSongs();
-      dispatch({ type: "SET_SONGS", songs: data.songs });
-      const newSong = data.songs.find((s) => s.filename === result.filename);
-      if (newSong) {
-        dispatch({ type: "PLAY_TRACK", track: newSong });
-      }
     } catch (error) {
-      // If aborted (cancel), let polling handle the final state reset.
-      // The server-side cancel sets is_generating=false after the pipeline
-      // stops, so polling will pick that up.
       if (error instanceof DOMException && error.name === "AbortError") {
-        // Aborted by cancel — polling will clean up
         return;
       }
-      // Actual error — stop polling and show error
       stopPolling();
       dispatch({ type: "SET_GENERATING", isGenerating: false });
       dispatch({
@@ -141,15 +235,12 @@ export function CreateView() {
         message: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
       });
     }
-  }, [state.isGenerating, state.songs.length, lyrics, styles, duration, cfgScale, temperature, title, dispatch, startProgressPolling, stopPolling]);
+  }, [state.isGenerating, state.songs.length, lyrics, styles, duration, cfgScale, temperature, topk, title, dispatch, startProgressPolling, stopPolling]);
 
   const handleCancel = useCallback(async () => {
     try {
-      // Tell server to cancel the pipeline
       await api.cancel();
       dispatch({ type: "SET_PROGRESS", progress: state.progress, message: "Cancelling..." });
-      // Abort the long-running generate fetch so handleGenerate doesn't
-      // try to process a (now-invalid) response
       generateAbortRef.current?.abort();
     } catch (e) {
       console.error("Failed to cancel:", e);
@@ -231,6 +322,27 @@ export function CreateView() {
         )}
       </section>
 
+       <div className="mt-4 grid grid-cols-3 gap-2">
+        {Object.entries(CONFIG_PRESETS).map(([key, config]) => (
+          <Button
+            key={key}
+            variant={activeConfig === key ? "default" : "outline"}
+            className={cn(
+              "h-auto py-2 text-xs",
+              activeConfig === key && "bg-primary text-primary-foreground"
+            )}
+            onClick={() => applyConfig(key as ConfigPreset)}
+          >
+            <div className="text-left">
+              <div className="font-medium">{config.name}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {config.description}
+              </div>
+            </div>
+          </Button>
+        ))}
+      </div>
+
       <section>
         <button
           className="flex w-full items-center gap-2 py-3"
@@ -251,8 +363,8 @@ export function CreateView() {
               <Slider
                 value={[temperature]}
                 onValueChange={([v]) => setTemperature(v)}
-                min={0.5}
-                max={1.5}
+                min={0.0}
+                max={2.0}
                 step={0.1}
                 className="flex-1"
               />
@@ -300,6 +412,21 @@ export function CreateView() {
                 placeholder="Song Title (Optional)"
                 className="h-auto border-0 bg-transparent p-0 text-sm focus-visible:ring-0"
               />
+            </div>
+
+            <div className="flex items-center gap-3 rounded-[10px] border border-border bg-input px-4 py-3">
+              <span className="min-w-30 text-[13px]">Top-K Sampling</span>
+              <Slider
+                value={[topk]}
+                onValueChange={([v]) => setTopk(v)}
+                min={20}
+                max={100}
+                step={1}
+                className="flex-1"
+              />
+              <span className="min-w-10 text-right text-[13px] text-muted-foreground">
+                {topk}
+              </span>
             </div>
           </div>
         )}
