@@ -2,6 +2,8 @@
 
 Use HeartMuLa (3B happy-new-year) on Apple silicon.
 
+Archived, superseeded by [Mélodie](https://github.com/uplg/melodie)
+
 [Demo](./demo.mp3)
 
 ![Screenshot](./screenshot.jpg)
